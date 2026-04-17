@@ -1,0 +1,22 @@
+# Environment files (NEVER commit these)
+.env
+.env.*
+.env.local
+
+# Logs
+logs
+*.log
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.bak
+
+# Temp/utility scripts (database clones, migrations)
+*.sql
+!migrations/*.sql
