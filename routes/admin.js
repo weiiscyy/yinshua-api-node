@@ -170,6 +170,18 @@ function buildProgress(order, productType) {
 // ⚠️ 路由顺序很重要：具体路径必须放在参数路径前面
 
 // ── 1. 概览统计（要放在 /:product_type 前面）────────────────
+/**
+ * @swagger
+ * /api/admin/orders/stats/overview:
+ *   get:
+ *     summary: 订单统计概览
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 各产品线订单统计（总数/进行中/已完成）
+ */
 router.get('/stats/overview', authMiddleware, async (req, res) => {
   try {
     const stats = {};
@@ -194,6 +206,29 @@ router.get('/stats/overview', authMiddleware, async (req, res) => {
 });
 
 // ── 2. 用户列表（要放在 /:product_type 前面）────────────────
+/**
+ * @swagger
+ * /api/admin/orders/users/list:
+ *   get:
+ *     summary: 用户列表
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 用户列表
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   UserID: { type: integer }
+ *                   UserName: { type: string }
+ *                   Department: { type: string }
+ *                   Dep_cj: { type: string }
+ */
 router.get('/users/list', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   try {
     const users = await db.query('SELECT UserID, UserName, Department, Dep_cj FROM UserInfo WHERE IsDel = 0');
@@ -204,6 +239,63 @@ router.get('/users/list', authMiddleware, requireDept('A', 'S'), async (req, res
 });
 
 // ── 3. 订单列表（精确路径 /）────────────────────────────────
+/**
+ * @swagger
+ * /api/admin/orders:
+ *   get:
+ *     summary: 订单列表（管理端）
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: keyword
+ *         schema:
+ *           type: string
+ *         description: 关键词搜索（订单号/客户/花号/制单人）
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [0, 1]
+ *         description: 发货状态（0=未发货，1=已发货）
+ *       - in: query
+ *         name: ywy
+ *         schema:
+ *           type: integer
+ *         description: 业务员ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 订单分页列表
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 page_size: { type: integer }
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ */
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { product_type, keyword, status, ywy, page = 1, page_size = 20 } = req.query;
@@ -252,6 +344,42 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // ── 4. 新建订单（精确路径 POST /）───────────────────────────
+/**
+ * @swagger
+ * /api/admin/orders:
+ *   post:
+ *     summary: 新建订单（管理端）
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [product_type, company]
+ *             properties:
+ *               product_type:
+ *                 type: string
+ *                 enum: [YS, YM, ZM, DS]
+ *               company:
+ *                 type: string
+ *               yjbhao: { type: string }
+ *               cpgg: { type: string }
+ *               pingshu: { type: string }
+ *               shuliang: { type: string }
+ *               ywy: { type: integer }
+ *               jyyaoqiu: { type: string }
+ *               zhengli: { type: string }
+ *     responses:
+ *       200:
+ *         description: 创建成功
+ *       400:
+ *         description: 参数错误
+ *       401:
+ *         description: 未授权
+ */
 router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   try {
     const { product_type, company, yjbhao, cpgg, pingshu, shuliang, ywy, jyyaoqiu, zhengli } = req.body;
@@ -305,7 +433,33 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   }
 });
 
-// ── 5. 订单详情（参数路径，放后面）───────────────────────────
+// ── 5. 订单详情（参数路径，放后面）──────────────────────────
+/**
+ * @swagger
+ * /api/admin/orders/{product_type}/{dd_id}:
+ *   get:
+ *     summary: 订单详情
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 订单详情（含工序进度）
+ *       404:
+ *         description: 订单不存在
+ */
 router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { product_type, dd_id } = req.params;
@@ -324,6 +478,46 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
 });
 
 // ── 6. 更新工序节点（参数路径）──────────────────────────────
+/**
+ * @swagger
+ * /api/admin/orders/{product_type}/{dd_id}/step:
+ *   post:
+ *     summary: 更新工序完成状态
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [step, completed]
+ *             properties:
+ *               step:
+ *                 type: string
+ *                 description: 工序字段名，如 jhkdd, jhkprint, sccjjs 等
+ *               completed:
+ *                 type: boolean
+ *                 description: true=完成，false=撤销
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *       400:
+ *         description: 参数错误
+ */
 router.post('/:product_type/:dd_id/step', authMiddleware, async (req, res) => {
   try {
     const { product_type, dd_id } = req.params;
@@ -367,6 +561,57 @@ router.post('/:product_type/:dd_id/step', authMiddleware, async (req, res) => {
 
 // ── 7. 车间修改订单（JHK Edit）──────────────────────────────
 // 允许修改：接单日期、交货日期、数量、备注、开料要求、机印要求、JHK工序字段
+/**
+ * @swagger
+ * /api/admin/orders/{product_type}/{dd_id}:
+ *   patch:
+ *     summary: 车间修改订单
+ *     tags: [管理]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               prouddate: { type: string, format: date-time }
+ *               overdate: { type: string, format: date-time }
+ *               shuliang: { type: string }
+ *               beizhu: { type: string }
+ *               beizhuYS: { type: string }
+ *               beizhuZM: { type: string }
+ *               klyaoqiu: { type: string }
+ *               jyyaoqiu: { type: string }
+ *               fahuodanwei: { type: string }
+ *               jhkdd: { type: boolean }
+ *               jhkprint: { type: boolean }
+ *               sccjjs: { type: boolean }
+ *               sccjyl: { type: boolean }
+ *               sccjdn: { type: boolean }
+ *               sccjsc: { type: boolean }
+ *               sccjwc: { type: boolean }
+ *               hzljs: { type: boolean }
+ *               fahuo: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *       403:
+ *         description: 无权修改此产品线
+ */
 router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { product_type, dd_id } = req.params;

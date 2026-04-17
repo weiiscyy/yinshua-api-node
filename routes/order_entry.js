@@ -45,6 +45,18 @@ async function generateDdbh(product_type) {
   }
 }
 
+/**
+ * @swagger
+ * /api/order_entry/process-classes:
+ *   get:
+ *     summary: 获取工序流程分类
+ *     tags: [订单录入]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 工序流程分类
+ */
 router.get('/process-classes', authMiddleware, async (req, res) => {
   const result = {};
   for (const [pt, classes] of Object.entries(PROCESS_CLASSES)) {
@@ -57,6 +69,147 @@ router.get('/process-classes', authMiddleware, async (req, res) => {
   res.json(result);
 });
 
+/**
+ * @swagger
+ * /api/order_entry:
+ *   post:
+ *     summary: 创建新订单
+ *     tags: [订单录入]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [product_type, company]
+ *             properties:
+ *               product_type:
+ *                 type: string
+ *                 enum: [YS, YM, ZM, DS]
+ *                 description: 产品类型
+ *               company:
+ *                 type: string
+ *                 description: 客户公司
+ *               ddbh:
+ *                 type: string
+ *                 description: 订单编号（可选，自动生成）
+ *               prouddate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 制单日期
+ *               overdate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 交货日期
+ *               yjbhao:
+ *                 type: string
+ *                 description: 样板号
+ *               cpgg:
+ *                 type: string
+ *                 description: 产品规格
+ *               pingshu:
+ *                 type: string
+ *                 description: 品名/品书
+ *               shuliang:
+ *                 type: string
+ *                 description: 数量
+ *               ywy:
+ *                 type: integer
+ *                 description: 业务员ID
+ *               zhidan:
+ *                 type: string
+ *                 description: 制单人
+ *               fahuodanwei:
+ *                 type: string
+ *                 description: 发货单位
+ *               kuanhao:
+ *                 type: string
+ *                 description: 款号
+ *               jiagongfei:
+ *                 type: string
+ *                 description: 加工费
+ *               waifa:
+ *                 type: boolean
+ *                 description: 是否外发
+ *               danjia:
+ *                 type: number
+ *                 description: 单价
+ *               sydazhang:
+ *                 type: integer
+ *                 description: 是否有大账
+ *               syMoney:
+ *                 type: number
+ *                 description: 大账金额
+ *               beizhu:
+ *                 type: string
+ *                 description: 备注
+ *               sclcSteps:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 工序步骤列表
+ *               proudnumber:
+ *                 type: string
+ *                 description: 产品编号（YS/YM）
+ *               lldate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 领料日期（YS/YM）
+ *               cidiehao:
+ *                 type: string
+ *                 description: 刺青号（ZM）
+ *               allcount:
+ *                 type: string
+ *                 description: 总数（ZM）
+ *               weidu:
+ *                 type: string
+ *                 description: 维度（ZM）
+ *               kuandu:
+ *                 type: string
+ *                 description: 宽度（ZM）
+ *               changdu:
+ *                 type: string
+ *                 description: 长度（ZM）
+ *               huachang:
+ *                 type: string
+ *                 description: 花厂（ZM）
+ *               huahao:
+ *                 type: string
+ *                 description: 花号（ZM）
+ *               jiage:
+ *                 type: string
+ *                 description: 价格（DS）
+ *               zhengli:
+ *                 type: string
+ *                 description: 整理（DS）
+ *               fhdw:
+ *                 type: string
+ *                 description: 发货单位（DS）
+ *               fhdate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 发货日期（DS）
+ *               fhr:
+ *                 type: string
+ *                 description: 发货人（DS）
+ *     responses:
+ *       200:
+ *         description: 创建成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 ddbh: { type: string }
+ *                 DD_id: { type: integer }
+ *       400:
+ *         description: 参数错误
+ *       500:
+ *         description: 创建失败
+ */
 router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   try {
     const body = req.body;

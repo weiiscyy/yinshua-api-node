@@ -29,6 +29,35 @@ function getStepsForType(productType) {
 }
 
 // 获取可报工的订单列表
+/**
+ * @swagger
+ * /api/production/orders:
+ *   get:
+ *     summary: 获取可报工的订单列表
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 可报工订单列表
+ */
 router.get('/orders', authMiddleware, async (req, res) => {
   try {
     const { product_type, page = 1, page_size = 20 } = req.query;
@@ -106,6 +135,34 @@ router.get('/orders', authMiddleware, async (req, res) => {
 });
 
 // 获取订单报工状态详情
+/**
+ * @swagger
+ * /api/production/order/{dd_id}:
+ *   get:
+ *     summary: 获取订单报工状态详情
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *     responses:
+ *       200:
+ *         description: 订单报工详情
+ *       400:
+ *         description: 请指定产品类型
+ *       404:
+ *         description: 订单不存在
+ */
 router.get('/order/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { dd_id } = req.params;
@@ -217,6 +274,59 @@ router.get('/order/:dd_id', authMiddleware, async (req, res) => {
 });
 
 // 提交报工
+/**
+ * @swagger
+ * /api/production/report:
+ *   post:
+ *     summary: 提交报工
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [dd_id, product_type, gongxu_field, baochan_num]
+ *             properties:
+ *               dd_id:
+ *                 type: integer
+ *                 description: 订单ID
+ *               product_type:
+ *                 type: string
+ *                 enum: [YS, YM, ZM, DS]
+ *                 description: 产品类型
+ *               gongxu_field:
+ *                 type: string
+ *                 description: 工序字段名
+ *               gongxu_color:
+ *                 type: string
+ *                 nullable: true
+ *                 description: 工序颜色
+ *               baochan_num:
+ *                 type: number
+ *                 description: 报产数量
+ *               buliang_num:
+ *                 type: number
+ *                 description: 不良数量（默认0）
+ *               buliang_reason:
+ *                 type: string
+ *                 nullable: true
+ *                 description: 不良原因
+ *               remark:
+ *                 type: string
+ *                 description: 备注
+ *     responses:
+ *       200:
+ *         description: 报工成功
+ *       400:
+ *         description: 参数错误或不允许报工
+ *       404:
+ *         description: 订单不存在
+ *       500:
+ *         description: 报工失败
+ */
 router.post('/report', authMiddleware, async (req, res) => {
   try {
     const {
@@ -320,6 +430,35 @@ router.post('/report', authMiddleware, async (req, res) => {
 });
 
 // 我的报工记录
+/**
+ * @swagger
+ * /api/production/my-reports:
+ *   get:
+ *     summary: 获取我的报工记录
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 筛选日期
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 报工记录列表
+ */
 router.get('/my-reports', authMiddleware, async (req, res) => {
   try {
     const { date, page = 1, page_size = 20 } = req.query;
@@ -372,6 +511,31 @@ router.get('/my-reports', authMiddleware, async (req, res) => {
 });
 
 // 工人产量统计
+/**
+ * @swagger
+ * /api/production/stats/worker:
+ *   get:
+ *     summary: 工人产量统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 开始日期
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 结束日期
+ *     responses:
+ *       200:
+ *         description: 工人产量统计
+ */
 router.get('/stats/worker', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
@@ -402,6 +566,32 @@ router.get('/stats/worker', authMiddleware, async (req, res) => {
 });
 
 // 订单报工明细
+/**
+ * @swagger
+ * /api/production/stats/order/{dd_id}:
+ *   get:
+ *     summary: 订单报工明细
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *     responses:
+ *       200:
+ *         description: 订单报工明细
+ *       400:
+ *         description: 请指定产品类型
+ */
 router.get('/stats/order/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { dd_id } = req.params;
@@ -438,6 +628,37 @@ router.get('/stats/order/:dd_id', authMiddleware, async (req, res) => {
 });
 
 // 不良原因统计
+/**
+ * @swagger
+ * /api/production/stats/defects:
+ *   get:
+ *     summary: 不良原因统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 开始日期
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 结束日期
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品类型
+ *     responses:
+ *       200:
+ *         description: 不良原因统计
+ */
 router.get('/stats/defects', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date, product_type } = req.query;
@@ -488,6 +709,25 @@ router.get('/stats/defects', authMiddleware, async (req, res) => {
 });
 
 // 日报统计
+/**
+ * @swagger
+ * /api/production/stats/daily:
+ *   get:
+ *     summary: 日报统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 日期（默认当天）
+ *     responses:
+ *       200:
+ *         description: 日报统计
+ */
 router.get('/stats/daily', authMiddleware, async (req, res) => {
   try {
     const { date } = req.query;

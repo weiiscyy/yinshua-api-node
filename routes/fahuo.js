@@ -13,6 +13,32 @@ async function reqT(sqlStr, params) {
 }
 
 // ── 发货单列表 ───────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/list:
+ *   get:
+ *     summary: 发货单列表
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         description: 搜索关键词（公司/快递公司/快递号）
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 发货单分页列表
+ */
 router.get('/list', authMiddleware, async function(req, res) {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -69,6 +95,27 @@ router.get('/list', authMiddleware, async function(req, res) {
 });
 
 // ── 获取单个发货单（含关联订单） ───────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   get:
+ *     summary: 获取发货单详情
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 发货单ID
+ *     responses:
+ *       200:
+ *         description: 发货单详情（含关联订单）
+ *       404:
+ *         description: 未找到该发货单
+ */
 router.get('/:id', authMiddleware, async function(req, res) {
   try {
     const fCols = 'f.ID AS id, f.company, f.RegTime AS regtime, f.kdgs, f.kdhao, f.fhr, f.ywy, u.UserName AS ywy_name';
@@ -97,6 +144,30 @@ router.get('/:id', authMiddleware, async function(req, res) {
 });
 
 // ── 待发货订单列表 ───────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/orders/pending:
+ *   get:
+ *     summary: 待发货订单列表
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: company
+ *         schema:
+ *           type: string
+ *         description: 客户名称
+ *     responses:
+ *       200:
+ *         description: 未完成发货的订单列表
+ */
 router.get('/orders/pending', authMiddleware, async function(req, res) {
   try {
     const pt = req.query.product_type;
@@ -173,6 +244,32 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
 });
 
 // ── 新建发货单 ──────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo:
+ *   post:
+ *     summary: 新建发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               company: { type: string, description: 收货单位 }
+ *               kdgs: { type: string, description: 快递公司 }
+ *               kdhao: { type: string, description: 快递号 }
+ *               ywy: { type: integer, description: 业务员ID }
+ *               orders: { type: array, description: 关联订单列表', items: { type: object } }
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ *       400:
+ *         description: 参数缺失
+ */
 router.post('/', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   const pool = await db.getPool();
   const transaction = new mssql.Transaction(pool);
@@ -257,6 +354,35 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async function(req, res)
 });
 
 // ── 修改发货单 ──────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   put:
+ *     summary: 修改发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               company: { type: string }
+ *               kdgs: { type: string }
+ *               kdhao: { type: string }
+ *               ywy: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 修改成功
+ */
 router.put('/:id', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   try {
     const body = req.body;
@@ -302,6 +428,24 @@ router.put('/:id', authMiddleware, requireDept('A', 'S'), async function(req, re
 });
 
 // ── 删除发货单 ─────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   delete:
+ *     summary: 删除发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   const pool = await db.getPool();
   const transaction = new mssql.Transaction(pool);
@@ -342,6 +486,31 @@ router.delete('/:id', authMiddleware, requireDept('A', 'S'), async function(req,
 });
 
 // ── 取消单个订单的发货关联 ────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{fhId}/orders/{ddId}:
+ *   delete:
+ *     summary: 取消单个订单的发货关联
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fhId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 发货单ID
+ *       - in: path
+ *         name: ddId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 订单ID
+ *     responses:
+ *       200:
+ *         description: 取消成功
+ */
 router.delete('/:fhId/orders/:ddId', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   try {
     const fhId = parseInt(req.params.fhId);

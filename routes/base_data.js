@@ -5,6 +5,26 @@ const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
 // 初始化基础数据表（仅建表，不重复创建）
+/**
+ * @swagger
+ * /api/base_data/init:
+ *   post:
+ *     summary: 初始化基础数据表
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 初始化完成
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *       500:
+ *         description: 初始化失败
+ */
 router.post('/init', authMiddleware, async (req, res) => {
   try {
     // 业务员表（从 UserInfo 同步）
@@ -52,6 +72,27 @@ router.post('/init', authMiddleware, async (req, res) => {
 });
 
 // 同步业务员（从 UserInfo）
+/**
+ * @swagger
+ * /api/base_data/sync-salespersons:
+ *   post:
+ *     summary: 同步业务员（从 UserInfo）
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 同步完成
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 count: { type: integer }
+ *       500:
+ *         description: 同步失败
+ */
 router.post('/sync-salespersons', authMiddleware, async (req, res) => {
   try {
     const users = await db.query(
@@ -72,6 +113,42 @@ router.post('/sync-salespersons', authMiddleware, async (req, res) => {
 });
 
 // ===== 业务员 CRUD =====
+/**
+ * @swagger
+ * /api/base_data/salespersons:
+ *   get:
+ *     summary: 获取业务员列表
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 业务员列表
+ *   post:
+ *     summary: 新增业务员
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: 姓名
+ *               department:
+ *                 type: string
+ *                 description: 部门（默认 A）
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ *       400:
+ *         description: 姓名为必填项
+ */
 router.get('/salespersons', authMiddleware, async (req, res) => {
   try {
     const rows = await db.query('SELECT * FROM SalesPerson WHERE isDel = 0');
@@ -96,6 +173,47 @@ router.post('/salespersons', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/base_data/salespersons/{id}:
+ *   put:
+ *     summary: 更新业务员
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               department: { type: string }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除业务员
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/salespersons/:id', authMiddleware, async (req, res) => {
   try {
     const { name, department } = req.body;
@@ -119,6 +237,38 @@ router.delete('/salespersons/:id', authMiddleware, async (req, res) => {
 });
 
 // ===== 公司 CRUD =====
+/**
+ * @swagger
+ * /api/base_data/companies:
+ *   get:
+ *     summary: 获取公司列表
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 公司列表
+ *   post:
+ *     summary: 新增公司
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name: { type: string, description: 公司名称 }
+ *               address: { type: string, description: 地址 }
+ *               phone: { type: string, description: 电话 }
+ *               contact: { type: string, description: 联系人 }
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
 router.get('/companies', authMiddleware, async (req, res) => {
   try {
     const rows = await db.query('SELECT * FROM Company WHERE isDel = 0');
@@ -144,6 +294,49 @@ router.post('/companies', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/base_data/companies/{id}:
+ *   put:
+ *     summary: 更新公司
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               address: { type: string }
+ *               phone: { type: string }
+ *               contact: { type: string }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除公司
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/companies/:id', authMiddleware, async (req, res) => {
   try {
     const { name, address, phone, contact } = req.body;
@@ -171,6 +364,39 @@ router.delete('/companies/:id', authMiddleware, async (req, res) => {
 });
 
 // ===== 发货地址 CRUD =====
+/**
+ * @swagger
+ * /api/base_data/shipping-addresses:
+ *   get:
+ *     summary: 获取发货地址列表
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 发货地址列表
+ *   post:
+ *     summary: 新增发货地址
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [address]
+ *             properties:
+ *               company_id: { type: integer, description: 公司ID }
+ *               address: { type: string, description: 地址 }
+ *               contact: { type: string, description: 联系人 }
+ *               phone: { type: string, description: 电话 }
+ *               isDefault: { type: boolean, description: 是否默认 }
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
 router.get('/shipping-addresses', authMiddleware, async (req, res) => {
   try {
     const rows = await db.query(
@@ -203,6 +429,50 @@ router.post('/shipping-addresses', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/base_data/shipping-addresses/{id}:
+ *   put:
+ *     summary: 更新发货地址
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               company_id: { type: integer }
+ *               address: { type: string }
+ *               contact: { type: string }
+ *               phone: { type: string }
+ *               isDefault: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ *   delete:
+ *     summary: 删除发货地址
+ *     tags: [基础数据]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.put('/shipping-addresses/:id', authMiddleware, async (req, res) => {
   try {
     const { company_id, address, contact, phone, isDefault } = req.body;

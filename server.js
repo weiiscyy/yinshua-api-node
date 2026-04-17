@@ -2,15 +2,27 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerUiDist = require('swagger-ui-dist');
+const swaggerSpec = require('./config/swagger');
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-// Middleware
 
+// Middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+
+// Swagger UI 静态文件（从 swagger-ui-dist 提供）
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: '印刷订单 API 文档',
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -32,7 +44,7 @@ app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 
 // SPA fallback - serve index.html for non-API routes
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/api-docs')) {
     res.sendFile(path.join(staticPath, 'index.html'));
   } else {
     res.status(404).json({ error: 'Not found' });
@@ -45,4 +57,5 @@ app.use(errorHandler);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`印刷订单 API 已启动: http://0.0.0.0:${PORT}`);
+  console.log(`API 文档: http://0.0.0.0:${PORT}/api-docs`);
 });
