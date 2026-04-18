@@ -226,6 +226,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
       cidiehao, allcount, weidu, kuandu, changdu, huachang, huahao,
       chenpingcc, dhdw, sxdate, soujianjl, proudbanbie,
       zm_zhijian, gyyq,
+      // YM 专用
+      hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7,
+      beizhu8, upfile,
       // DS 专用
       jiage, zhengli, fhdw, fhdate, fhr,
     } = body;
@@ -298,6 +301,18 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           zhengli: ['zhengli', db.mssql.NVarChar, zhengli || ''],
           gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
           yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
+          ylzd: ['ylzd', db.mssql.NVarChar, ylzd || ''],
+          jyyaoqiu: ['jyyaoqiu', db.mssql.NVarChar, jyyaoqiu || ''],
+          beizhu: ['beizhu', db.mssql.NVarChar, body.beizhu || body.beizhuYM || ''],
+          beizhu8: ['beizhu8', db.mssql.NVarChar, beizhu8 || ''],
+          upfile: ['upfile', db.mssql.NVarChar, upfile || ''],
+          hzl1: ['hzl1', db.mssql.Int, hzl1 || 0],
+          hzl2: ['hzl2', db.mssql.Int, hzl2 || 0],
+          hzl3: ['hzl3', db.mssql.Int, hzl3 || 0],
+          hzl4: ['hzl4', db.mssql.Int, hzl4 || 0],
+          hzl5: ['hzl5', db.mssql.Int, hzl5 || 0],
+          hzl6: ['hzl6', db.mssql.Int, hzl6 || 0],
+          hzl7: ['hzl7', db.mssql.Int, hzl7 || 0],
         },
         ZM: {
           ...commonFields,
