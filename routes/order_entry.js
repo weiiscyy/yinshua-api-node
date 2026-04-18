@@ -297,7 +297,7 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           lldate: ['lldate', db.mssql.DateTime, lldate || null],
           zhengli: ['zhengli', db.mssql.NVarChar, zhengli || ''],
           gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
-          yssj: ['yssj', db.mssql.NVarChar, yssj || ''],
+          yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
         },
         ZM: {
           ...commonFields,

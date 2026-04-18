@@ -92,15 +92,17 @@ function buildProgress(order, productType) {
       ...base,
       shuliang: order.shuliang,
       yjbhao: order.yjbhao,
+      kuanhao: order.kuanhao,
       cpgg: order.cpgg,
       pingshu: order.pingshu,
       danjia: order.danjia,
-      yszj: order.yszj,
+      fahuodanwei: order.fahuodanwei,
+      jiagongfei: order.jiagongfei,
+      waifa: order.waifa,
       zhengli: order.zhengli,
       gyyq: order.gyyq,
       proudnumber: order.proudnumber,
       lldate: order.lldate ? new Date(order.lldate).toISOString() : null,
-      waifa: order.waifa,
       yssl1: order.yssl1, yssl2: order.yssl2, yssl3: order.yssl3, yssl4: order.yssl4,
       yssl5: order.yssl5, yssl6: order.yssl6, yssl7: order.yssl7, yssl8: order.yssl8, yssl9: order.yssl9,
       ysdw1: order.ysdw1, ysdw2: order.ysdw2, ysdw3: order.ysdw3, ysdw4: order.ysdw4,
@@ -636,7 +638,8 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     ];
 
     const updates = [];
-    const params = [];
+    const pool = await db.getPool();
+    const req_ = pool.request();
     let pi = 0;
 
     for (const [key, val] of Object.entries(req.body)) {
@@ -645,19 +648,19 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
 
       if (key === 'prouddate' || key === 'overdate') {
         updates.push(`[${key}] = @p${pi}`);
-        params.push([`p${pi}`, db.mssql.DateTime, val ? new Date(val) : null]);
+        req_.input(`p${pi}`, db.mssql.DateTime, val ? new Date(val) : null);
         pi++;
       } else if (key === 'shuliang') {
         updates.push(`[${key}] = @p${pi}`);
-        params.push([`p${pi}`, db.mssql.NVarChar, String(val)]);
+        req_.input(`p${pi}`, db.mssql.NVarChar, String(val));
         pi++;
       } else if (typeof val === 'boolean') {
         updates.push(`[${key}] = @p${pi}`);
-        params.push([`p${pi}`, db.mssql.Bit, val ? 1 : 0]);
+        req_.input(`p${pi}`, db.mssql.Bit, val ? 1 : 0);
         pi++;
       } else {
         updates.push(`[${key}] = @p${pi}`);
-        params.push([`p${pi}`, db.mssql.NVarChar, String(val ?? '')]);
+        req_.input(`p${pi}`, db.mssql.NVarChar, String(val ?? ''));
         pi++;
       }
     }
@@ -666,10 +669,10 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '没有有效的更新字段' });
     }
 
-    params.push([`p${pi}`, db.mssql.Int, parseInt(dd_id)]);
+    req_.input(`p${pi}`, db.mssql.Int, parseInt(dd_id));
     const sql = `UPDATE ${TABLE_MAP[product_type]} SET ${updates.join(', ')} WHERE DD_id = @p${pi}`;
 
-    await db.query(sql, params);
+    await req_.query(sql);
 
     const order = await db.queryOne(
       `SELECT * FROM ${TABLE_MAP[product_type]} WHERE DD_id = @p0`,
