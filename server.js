@@ -3,7 +3,6 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
-const swaggerUiDist = require('swagger-ui-dist');
 const swaggerSpec = require('./config/swagger');
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
@@ -15,12 +14,18 @@ const PORT = process.env.PORT || 8000;
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Swagger UI 静态文件（从 swagger-ui-dist 提供）
+// Swagger spec JSON 端点（供前端 UI 调用）
+app.get('/api-docs/spec.json', (req, res) => {
+  res.json(swaggerSpec);
+});
+
+// Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: '印刷订单 API 文档',
   swaggerOptions: {
     persistAuthorization: true,
+    spec: swaggerSpec,
   },
 }));
 
@@ -30,6 +35,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin/orders', require('./routes/admin'));
 app.use('/api/order-entry', require('./routes/order_entry'));
 app.use('/api/base-data', require('./routes/base_data'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/fahuo', require('./routes/fahuo'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/query', require('./routes/query'));
