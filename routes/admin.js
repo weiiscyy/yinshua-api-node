@@ -105,9 +105,9 @@ function buildProgress(order, productType) {
       lldate: order.lldate ? new Date(order.lldate).toISOString() : null,
       ylzd: order.ylzd,
       jyyaoqiu: order.jyyaoqiu,
-      beizhu: order.beizhu,
+      beizhu: order.beizhuYM,
       beizhu8: order.beizhu8,
-      upfile: order.upfile,
+      upfile: order.UpFile,
       hzl1: order.hzl1, hzl2: order.hzl2, hzl3: order.hzl3,
       hzl4: order.hzl4, hzl5: order.hzl5, hzl6: order.hzl6, hzl7: order.hzl7,
       sydazhang: order.sydazhang,
@@ -143,6 +143,7 @@ function buildProgress(order, productType) {
       shuliang: order.shuliang,
       huahao: order.huahao,
       cidiehao: order.cidiehao,
+      kuanhao: order.kuanhao,
       kuandu: order.kuandu,
       changdu: order.changdu,
       huachang: order.huachang,
@@ -153,6 +154,9 @@ function buildProgress(order, productType) {
       jijia: order.jijia,
       beizhuZM: order.beizhuZM,
       soujianjl: order.soujianjl,
+      zhengli: order.zhengli,
+      ywy: order.ywy,
+      fahuodanwei: order.fahuodanwei,
       ...zmColor,
       ...zmSize,
     };
@@ -310,16 +314,90 @@ router.get('/users/list', authMiddleware, requireDept('A', 'S'), async (req, res
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { product_type, keyword, status, ywy, page = 1, page_size = 20 } = req.query;
-    const results = [];
+    const pageNum = parseInt(page);
+    const pageSize = parseInt(page_size);
     const types = product_type && TABLE_MAP[product_type] ? [product_type] : Object.keys(TABLE_MAP);
 
-    for (const ptype of types) {
+    // 并行查询所有产品线
+    const promises = types.map(ptype => {
       const table = TABLE_MAP[ptype];
-      // SQL Server 2008 compatible: use TOP for reasonable upper bound,
-      // fetch enough to cover the requested page across all 4 product lines
-      const perTableLimit = 5000;
-      let sql = `SELECT TOP ${perTableLimit} * FROM ${table} WHERE 1=1`;
+      let sql = `SELECT COUNT(*) as total FROM ${table} WHERE 1=1`;
       const params = [];
+
+      // 45天内订单
+      sql += ' AND prouddate >= DATEADD(day, -45, GETDATE())';
+
+      if (keyword) {
+        const k = `%${keyword}%`;
+        sql += ` AND (ddbh LIKE @p${params.length} OR company LIKE @p${params.length} OR yjbhao LIKE @p${params.length} OR zhidan LIKE @p${params.length})`;
+        params.push(k);
+      }
+
+      if (status === '0') sql += ' AND (fahuo IS NULL OR fahuo = 0)';
+      else if (status === '1') sql += ' AND fahuo = 1';
+
+      if (ywy) { sql += ` AND ywy = @p${params.length}`; params.push(parseInt(ywy)); }
+
+      if (req.user.dept === 'E') {
+        sql += ` AND zhidan = @p${params.length}`;
+        params.push(req.user.username);
+      }
+
+      return db.queryOne(sql, params).then(r => ({ ptype, total: r ? r.total : 0 }));
+    });
+
+    const counts = await Promise.all(promises);
+    const total = counts.reduce((s, c) => s + c.total, 0);
+
+    // 45天过滤后数据量小，每表最多取 pageSize 条，JS 层归并排序
+    const dataPromises = types.map(ptype => {
+      const table = TABLE_MAP[ptype];
+      const fields = [
+        'DD_id', 'ddbh', 'company', 'prouddate', 'overdate', 'ZT', 'fahuo', 'fahuoTime',
+        'jhkddClass', 'jhkddTime', 'jhkprint', 'jhkprintTime',
+        'sccjjs', 'sccjjsTime', 'sccjyl', 'sccjylTime',
+        'sccjdn', 'sccjdnTime', 'sccjsc', 'sccjscTime',
+        'sccjwc', 'sccjwcTime', 'hzljs', 'hzljsTime',
+        'ywy', 'zhidan',
+      ];
+      if (ptype === 'YS') fields.push(
+        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
+        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS', 'sclcClass',
+        'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl', 'klyaoqiu', 'jyyaoqiu',
+        'zhengli', 'proudnumber', 'lldate', 'sydazhang', 'syMoney',
+        'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+        'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
+        'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+        'yss20', 'ysdw10', 'ysy20',
+        'jine1', 'jine2', 'jine3', 'jine4',
+      );
+      if (ptype === 'YM') fields.push(
+        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
+        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS', 'sclcClass',
+        'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl', 'klyaoqiu', 'jyyaoqiu',
+        'zhengli', 'proudnumber', 'lldate',
+        'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+        'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
+        'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+        'yss20', 'ysdw10', 'ysy20',
+      );
+      if (ptype === 'ZM') fields.push(
+        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
+        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS',
+        'jyyaoqiu', 'zhengli',
+      );
+      if (ptype === 'DS') fields.push(
+        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
+        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS',
+        'jyyaoqiu', 'zhengli',
+      );
+
+      // 45天过滤后数据量小，每表 TOP pageSize，JS 层归并后取 offset ~ offset+pageSize
+      let sql = `SELECT TOP ${pageSize} ${fields.join(',')} FROM ${table} WHERE 1=1`;
+      const params = [];
+
+      // 45天内订单
+      sql += ' AND prouddate >= DATEADD(day, -45, GETDATE())';
 
       if (keyword) {
         const k = `%${keyword}%`;
@@ -338,16 +416,17 @@ router.get('/', authMiddleware, async (req, res) => {
       }
 
       sql += ' ORDER BY DD_id DESC';
-      const rows = await db.query(sql, params);
-      for (const order of rows) results.push(buildProgress(order, ptype));
-    }
 
-    results.sort((a, b) => b.DD_id - a.DD_id);
-    const total = results.length;
-    const offset = (parseInt(page) - 1) * parseInt(page_size);
-    const items = results.slice(offset, offset + parseInt(page_size));
+      return db.query(sql, params).then(rows => rows.map(order => buildProgress(order, ptype)));
+    });
 
-    res.json({ total, page: parseInt(page), page_size: parseInt(page_size), items });
+    const arrays = await Promise.all(dataPromises);
+    const merged = arrays.flat();
+    merged.sort((a, b) => b.DD_id - a.DD_id);
+    const offset = (pageNum - 1) * pageSize;
+    const items = merged.slice(offset, offset + pageSize);
+
+    res.json({ total, page: pageNum, page_size: pageSize, items });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '查询失败', detail: err.message });
