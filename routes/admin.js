@@ -362,7 +362,7 @@ router.get('/', authMiddleware, async (req, res) => {
       ];
       if (ptype === 'YS') fields.push(
         'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
-        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS', 'sclcClass',
+        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS',
         'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl', 'klyaoqiu', 'jyyaoqiu',
         'zhengli', 'proudnumber', 'lldate', 'sydazhang', 'syMoney',
         'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
@@ -373,23 +373,21 @@ router.get('/', authMiddleware, async (req, res) => {
       );
       if (ptype === 'YM') fields.push(
         'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
-        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS', 'sclcClass',
-        'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl', 'klyaoqiu', 'jyyaoqiu',
-        'zhengli', 'proudnumber', 'lldate',
+        'fahuodanwei', 'jiagongfei', 'waifa',
+        'ylzd', 'jyyaoqiu', 'zhengli', 'proudnumber', 'lldate',
         'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
         'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
         'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
         'yss20', 'ysdw10', 'ysy20',
+        'jine1', 'jine2', 'jine3', 'jine4',
       );
       if (ptype === 'ZM') fields.push(
-        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
-        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS',
-        'jyyaoqiu', 'zhengli',
+        'shuliang', 'fahuodanwei', 'jiagongfei', 'waifa',
+        'zhengli',
       );
       if (ptype === 'DS') fields.push(
-        'shuliang', 'yjbhao', 'kuanhao', 'cpgg', 'pingshu', 'danjia', 'yszj',
-        'fahuodanwei', 'jiagongfei', 'waifa', 'beizhuYS',
-        'jyyaoqiu', 'zhengli',
+        'shuliang', 'yjbhao', 'fahuodanwei', 'jiagongfei', 'waifa',
+        'zhengli',
       );
 
       // 45天过滤后数据量小，每表 TOP pageSize，JS 层归并后取 offset ~ offset+pageSize
