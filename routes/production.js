@@ -18,6 +18,26 @@ const STEPS = [
   { field: 'fahuo',    label: '发货',     order: 9, timeField: 'fahuoTime' },
 ];
 
+// 检查指定工序是否可以报工（前序工序必须已完成）
+function canReportStep(order, gongxu_field, product_type) {
+  // 使用产品线对应的工序列表
+  const stepsForType = getStepsForType(product_type);
+  const stepDef = stepsForType.find(s => s.field === gongxu_field);
+  if (!stepDef) return false;
+
+  // 接单工序随时可报
+  if (stepDef.order === 1) return true;
+
+  // 检查所有前序工序是否已完成
+  for (const step of stepsForType) {
+    if (step.order < stepDef.order) {
+      const timeField = step.timeField;
+      if (!order[timeField]) return false;
+    }
+  }
+  return true;
+}
+
 // 按产品线过滤工序
 function getStepsForType(productType) {
   if (productType === 'YS') {
@@ -361,7 +381,7 @@ router.post('/report', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: '订单不存在' });
 
     // 检查工序是否可以报工
-    if (!canReportStep(order, gongxu_field)) {
+    if (!canReportStep(order, gongxu_field, product_type)) {
       return res.status(400).json({ error: '前序工序未完成，无法报工' });
     }
 
@@ -687,10 +707,17 @@ router.get('/stats/defects', authMiddleware, async (req, res) => {
 
     // 总计
     let totalSql = `SELECT SUM(BuLiangNum) as total FROM BaoGongLog WHERE BuLiangNum > 0`;
-    if (start_date) { totalSql += ` AND BaoGongTime >= @p0`; }
-    if (end_date) { totalSql += ` AND BaoGongTime <= @p${start_date ? 1 : 0}`; }
+    const totalParams = [];
+    if (start_date) {
+      totalSql += ` AND BaoGongTime >= @p0`;
+      totalParams.push(start_date);
+    }
+    if (end_date) {
+      totalSql += ` AND BaoGongTime <= @p${totalParams.length}`;
+      totalParams.push(end_date);
+    }
 
-    const totalResult = await db.queryOne(totalSql, params);
+    const totalResult = await db.queryOne(totalSql, totalParams);
 
     res.json({
       total_buliang: parseFloat(totalResult?.total) || 0,

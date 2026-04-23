@@ -2,9 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
-
-// 统一 JWT secret，所有路由必须与此保持一致
-const JWT_SECRET = process.env.JWT_SECRET || 'yinshua-secret';
+const { JWT_SECRET } = require('../config');
 
 const router = express.Router();
 

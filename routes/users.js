@@ -224,7 +224,7 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = authHeader.slice(7);
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'yinshua-secret');
+    const decoded = jwt.verify(token, require('../config').JWT_SECRET);
 
     const user = await db.queryOne(
       'SELECT UserID, PassWord FROM UserInfo WHERE UserID = @p0',
