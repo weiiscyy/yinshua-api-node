@@ -7,22 +7,9 @@ const router = express.Router();
 
 // buildProgress 保留本地（含 YS/YM/ZM/DS 额外字段），引用共享 STEPS/TABLE_MAP/PRODUCT_NAMES
 
-// ── 通用数据
-// 注意：根据生产环境验证，实际列名是 jhkddClass（接单状态），jhkddTime 记录时间
-const STEPS_LOCAL = [
-  { field: 'jhkddClass', label: '接单',     timeField: 'jhkddTime' },
-  { field: 'jhkprint',  label: '打印/晒版', timeField: 'jhkprintTime' },
-  { field: 'sccjjs',    label: '车间接收',  timeField: 'sccjjsTime' },
-  { field: 'sccjyl',    label: '预领料',    timeField: 'sccjylTime' },
-  { field: 'sccjdn',    label: '电脑制版',  timeField: 'sccjdnTime' },
-  { field: 'sccjsc',    label: '生产',      timeField: 'sccjscTime' },
-  { field: 'sccjwc',    label: '完成',      timeField: 'sccjwcTime' },
-  { field: 'hzljs',     label: '汇总',      timeField: 'hzljsTime' },
-  { field: 'fahuo',     label: '发货',      timeField: 'fahuoTime' },
-];
-
+// ── 通用数据（复用 progress.js 中的 STEPS，避免重复定义）
 function buildProgress(order, productType) {
-  const steps = STEPS_LOCAL.map(s => ({
+  const steps = STEPS.map(s => ({
     step: s.label,
     field: s.field,
     completed: order[s.field] === true || order[s.field] === 1,
