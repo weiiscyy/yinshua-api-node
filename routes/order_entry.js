@@ -425,6 +425,30 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         }
       }
 
+      // YM 印刷色数明细（yssl1-9, jine1-9, yszj）
+      if (product_type === 'YM') {
+        const updateParts = [];
+        const updateParams = [];
+        let pi = 0;
+        for (let i = 1; i <= 9; i++) {
+          if (body[`yssl${i}`] !== undefined || body[`jine${i}`] !== undefined) {
+            updateParts.push(`yssl${i}=@p${pi}`, `jine${i}=@p${pi+1}`);
+            updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body[`yssl${i}`] || '')], [`p${pi+1}`, db.mssql.NVarChar, String(body[`jine${i}`] || '')]);
+            pi += 2;
+          }
+        }
+        if (body.yszj !== undefined) {
+          updateParts.push(`yszj=@p${pi}`);
+          updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body.yszj || '')]);
+          pi += 1;
+        }
+        if (updateParts.length > 0) {
+          updateParams.push([`p${pi}`, db.mssql.Int, newId]);
+          const updateSql = `UPDATE ${product_type} SET ${updateParts.join(',')} WHERE DD_id=@p${pi}`;
+          await reqT(updateSql, updateParams);
+        }
+      }
+
       // ZM 色卡明细 qw/ss/bz, 尺码 sl/lieshu
       if (product_type === 'ZM') {
         const zmParts = [];

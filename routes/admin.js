@@ -365,8 +365,7 @@ router.get('/', authMiddleware, async (req, res) => {
         'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
         'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
         'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
-        'yss20', 'ysdw10', 'ysy20',
-        'jine1', 'jine2', 'jine3', 'jine4',
+        'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9',
       );
       if (ptype === 'ZM') fields.push(
         'shuliang', 'fahuodanwei', 'jiagongfei', 'waifa',
