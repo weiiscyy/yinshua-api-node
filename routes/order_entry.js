@@ -442,6 +442,13 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body.yszj || '')]);
           pi += 1;
         }
+        for (let i = 1; i <= 7; i++) {
+          if (body[`hzl${i}`] !== undefined) {
+            updateParts.push(`hzl${i}=@p${pi}`);
+            updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body[`hzl${i}`] || '0')]);
+            pi += 1;
+          }
+        }
         if (updateParts.length > 0) {
           updateParams.push([`p${pi}`, db.mssql.Int, newId]);
           const updateSql = `UPDATE ${product_type} SET ${updateParts.join(',')} WHERE DD_id=@p${pi}`;
