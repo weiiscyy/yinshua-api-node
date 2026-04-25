@@ -722,13 +722,92 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       }
     }
 
-    // 允许编辑的字段（白名单）
-    const ALLOWED_FIELDS = [
-      'prouddate', 'overdate', 'shuliang',
-      'beizhu', 'beizhuYS', 'beizhuZM',
-      'klyaoqiu', 'jyyaoqiu', 'fahuodanwei',
+    // 允许编辑的字段（按产品线的白名单，避免跨产品线字段导致 SQL 错误）
+    const ALLOWED_FIELDS = product_type === 'YS' ? [
+      // 基础字段
+      'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
+      'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
+      'beizhu', 'beizhuYS',
+      'klyaoqiu', 'jyyaoqiu', 'gyyq', 'lldate',
+      // 价格字段
+      'danjia', 'sydazhang', 'syMoney', 'yszj',
+      'jiagongfei', 'waifa', 'zhengli',
+      'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9', 'jine10',
+      'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+      'yss20', 'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9', 'ysdw10',
+      'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+      'ysy20',
+      // 工序步骤（YS 表的主表工序字段）
       'jhkdd', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
+      // YS 无 hzl1-7 主表字段，工序在 YSGX 表
+      // YS 特有（sclcClass 在 YSGX 表，不在 YS 主表）
+      'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl',
+      // 其他
+      'UpFile',
+    ] : product_type === 'YM' ? [
+      // 基础字段（全部 YM 表列）
+      'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
+      'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
+      'beizhuYM', 'beizhu8',
+      'jyyaoqiu', 'gyyq', 'lldate',
+      // 价格字段
+      'danjia', 'sydazhang', 'syMoney', 'yszj',
+      'jiagongfei', 'waifa', 'zhengli',
+      'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9', 'jine10',
+      'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+      'yss20', 'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9', 'ysdw10',
+      'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+      'ysy20',
+      // 工序步骤
+      'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
+      // YM 无 hzl1-7 主表字段，工序在 YMGX 表
+      // 其他
+      'UpFile', 'ylzd', 'proudbanbie',
+    ] : product_type === 'ZM' ? [
+      'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
+      'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
+      'beizhuZM', 'beizhu8',
+      'jyyaoqiu', 'gyyq', 'lldate',
+      'danjia', 'sydazhang', 'syMoney', 'yszj',
+      'jiagongfei', 'waifa', 'zhengli',
+      'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9', 'jine10',
+      'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+      'yss20', 'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9', 'ysdw10',
+      'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+      'ysy20',
+      'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
+      'hzl1', 'hzl2', 'hzl3', 'hzl4', 'hzl5', 'hzl6', 'hzl7',
+      // ZM 特有
+      'huahao', 'jijia', 'allcount', 'weidu', 'soujianjl', 'sxdate', 'zm_zhijian', 'proudbanbie',
+      // 其他
+      'UpFile', 'beizhu1', 'beizhu2', 'beizhu3', 'beizhu4', 'beizhu5',
+    ] : [
+      // DS 通用（不区分特有，全部列出）
+      'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
+      'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
+      'beizhu8',
+      'jyyaoqiu', 'gyyq', 'lldate',
+      'danjia', 'sydazhang', 'syMoney', 'yszj',
+      'jiagongfei', 'waifa', 'zhengli',
+      'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9', 'jine10',
+      'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
+      'yss20', 'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9', 'ysdw10',
+      'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
+      'ysy20',
+      'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
+      // DS 特有
+      'jiage', 'fhdw', 'fhdate', 'fhr', 'cidiehao',
+      // 其他
+      'UpFile', 'beizhu1', 'beizhu2', 'beizhu3', 'beizhu4', 'beizhu5',
     ];
+
+    // 字段名映射：JSON字段名 → 数据库列名（解决 YS/YM/ZM 表列名不同的问题）
+    const FIELD_MAP = {};
+    if (product_type === 'YS') {
+      FIELD_MAP.beizhu = 'beizhuYS';
+    } else if (product_type === 'YM') {
+      FIELD_MAP.beizhu = 'beizhuYM';
+    }
 
     const updates = [];
     const pool = await db.getPool();
@@ -739,20 +818,22 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       if (!ALLOWED_FIELDS.includes(key)) continue;
       if (val === undefined) continue;
 
+      const dbCol = FIELD_MAP[key] || key;
+
       if (key === 'prouddate' || key === 'overdate') {
-        updates.push(`[${key}] = @p${pi}`);
+        updates.push(`[${dbCol}] = @p${pi}`);
         req_.input(`p${pi}`, db.mssql.DateTime, val ? new Date(val) : null);
         pi++;
       } else if (key === 'shuliang') {
-        updates.push(`[${key}] = @p${pi}`);
+        updates.push(`[${dbCol}] = @p${pi}`);
         req_.input(`p${pi}`, db.mssql.NVarChar, String(val));
         pi++;
       } else if (typeof val === 'boolean') {
-        updates.push(`[${key}] = @p${pi}`);
+        updates.push(`[${dbCol}] = @p${pi}`);
         req_.input(`p${pi}`, db.mssql.Bit, val ? 1 : 0);
         pi++;
       } else {
-        updates.push(`[${key}] = @p${pi}`);
+        updates.push(`[${dbCol}] = @p${pi}`);
         req_.input(`p${pi}`, db.mssql.NVarChar, String(val ?? ''));
         pi++;
       }
@@ -767,10 +848,31 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
 
     await req_.query(sql);
 
+    // YMGX 工序表更新（YM 的 hzl1-7 在 YMGX 表）
+    if (product_type === 'YM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) {
+      // 重置所有 hzl 为 0，再根据 sclcSteps 勾选
+      const gxFields = { DD_id: parseInt(dd_id) };
+      for (let i = 1; i <= 7; i++) gxFields[`hzl${i}`] = 0;
+      req.body.sclcSteps.forEach(step => {
+        const num = step.split('-')[0].replace(/[^0-9]/g, '');
+        if (num) gxFields[`hzl${num}`] = 1;
+      });
+      const gxUpdates = Object.keys(gxFields).map(k => `[${k}]=@${k}`).join(', ');
+      const gxReq = pool.request();
+      Object.entries(gxFields).forEach(([k, v]) => gxReq.input(k, db.mssql.Int, v));
+      await gxReq.query(`UPDATE YMGX SET ${gxUpdates} WHERE DD_id=@DD_id`);
+    }
+
     const order = await db.queryOne(
       `SELECT * FROM ${TABLE_MAP[product_type]} WHERE DD_id = @p0`,
       [parseInt(dd_id)]
     );
+
+    // YMGX 查回 hzl1-7 附加到 order 对象
+    if (product_type === 'YM') {
+      const gx = await db.queryOne(`SELECT hzl1,hzl2,hzl3,hzl4,hzl5,hzl6,hzl7 FROM YMGX WHERE DD_id=@p0`, [parseInt(dd_id)]);
+      if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+    }
 
     res.json({ success: true, message: '订单已更新', data: buildProgress(order, product_type) });
   } catch (err) {
