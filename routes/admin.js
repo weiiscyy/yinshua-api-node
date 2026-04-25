@@ -366,7 +366,6 @@ router.get('/', authMiddleware, async (req, res) => {
         'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
         'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
         'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9',
-        'hzl1', 'hzl2', 'hzl3', 'hzl4', 'hzl5', 'hzl6', 'hzl7',
       );
       if (ptype === 'ZM') fields.push(
         'shuliang', 'fahuodanwei', 'jiagongfei', 'waifa',
@@ -402,7 +401,21 @@ router.get('/', authMiddleware, async (req, res) => {
 
       sql += ' ORDER BY DD_id DESC';
 
-      return db.query(sql, params).then(rows => rows.map(order => buildProgress(order, ptype)));
+      return db.query(sql, params).then(rows => {
+        if (ptype === 'YM' && rows.length > 0) {
+          const ids = rows.map(r => r.DD_id);
+          return db.query(`SELECT DD_id, hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7 FROM YMGX WHERE DD_id IN (${ids.map((_, i) => `@p${i}`).join(',')})`, ids).then(gxRows => {
+            const gxMap = {};
+            gxRows.forEach(g => { gxMap[g.DD_id] = g; });
+            rows.forEach(r => {
+              const gx = gxMap[r.DD_id];
+              if (gx) { for (let i = 1; i <= 7; i++) r[`hzl${i}`] = gx[`hzl${i}`]; }
+            });
+            return rows.map(order => buildProgress(order, ptype));
+          });
+        }
+        return rows.map(order => buildProgress(order, ptype));
+      });
     });
 
     const arrays = await Promise.all(dataPromises);
@@ -545,6 +558,12 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       [parseInt(dd_id)]
     );
     if (!order) return res.status(404).json({ error: '订单不存在' });
+
+    // YM 的 hzl1-7 在 YMGX 工序表，需要额外查询
+    if (product_type === 'YM') {
+      const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7 FROM YMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
+      if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+    }
 
     res.json(buildProgress(order, product_type));
   } catch (err) {
