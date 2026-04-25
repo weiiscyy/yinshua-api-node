@@ -99,6 +99,7 @@ function buildProgress(order, productType) {
       hzl4: order.hzl4, hzl5: order.hzl5, hzl6: order.hzl6, hzl7: order.hzl7,
       sydazhang: order.sydazhang,
       syMoney: order.syMoney,
+      yszj: order.yszj,
       yssl1: order.yssl1, yssl2: order.yssl2, yssl3: order.yssl3, yssl4: order.yssl4,
       yssl5: order.yssl5, yssl6: order.yssl6, yssl7: order.yssl7, yssl8: order.yssl8, yssl9: order.yssl9,
       ysdw1: order.ysdw1, ysdw2: order.ysdw2, ysdw3: order.ysdw3, ysdw4: order.ysdw4,
