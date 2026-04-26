@@ -793,13 +793,18 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       'hzl1', 'hzl2', 'hzl3', 'hzl4', 'hzl5', 'hzl6', 'hzl7',
       // ZM 特有
       'huahao', 'jijia', 'allcount', 'weidu', 'soujianjl', 'sxdate', 'zm_zhijian', 'proudbanbie',
+      'chenpingcc', 'kuandu', 'changdu', 'huachang', 'kts', 'dhdw',
+      // ZM 尺寸数组(cmh/sl/lieshu各10个)
+      'cmh1','cmh2','cmh3','cmh4','cmh5','cmh6','cmh7','cmh8','cmh9','cmh10',
+      'sl1','sl2','sl3','sl4','sl5','sl6','sl7','sl8','sl9','sl10',
+      'lieshu1','lieshu2','lieshu3','lieshu4','lieshu5','lieshu6','lieshu7','lieshu8','lieshu9','lieshu10',
       // 其他
       'UpFile', 'beizhu1', 'beizhu2', 'beizhu3', 'beizhu4', 'beizhu5',
     ] : [
       // DS 通用（不区分特有，全部列出）
       'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
       'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
-      'beizhu8',
+      'beizhu8', 'beizhuDS',
       'jyyaoqiu', 'gyyq', 'lldate',
       'danjia', 'sydazhang', 'syMoney', 'yszj',
       'jiagongfei', 'waifa', 'zhengli',
@@ -810,7 +815,8 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       'ysy20',
       'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
       // DS 特有
-      'jiage', 'fhdw', 'fhdate', 'fhr', 'cidiehao',
+      'jiage', 'fhdw', 'fhdate', 'fhr',
+      // cidiehao 已废弃（2010/12/27从旧系统移除），不再接受
       // 其他
       'UpFile', 'beizhu1', 'beizhu2', 'beizhu3', 'beizhu4', 'beizhu5',
     ];
@@ -821,6 +827,8 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       FIELD_MAP.beizhu = 'beizhuYS';
     } else if (product_type === 'YM') {
       FIELD_MAP.beizhu = 'beizhuYM';
+    } else if (product_type === 'DS') {
+      FIELD_MAP.beizhu = 'beizhuDS';
     }
 
     const updates = [];
