@@ -853,14 +853,15 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       }
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && product_type !== 'YS' && !(product_type === 'YM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0)) {
       return res.status(400).json({ error: '没有有效的更新字段' });
     }
 
-    req_.input(`p${pi}`, db.mssql.Int, parseInt(dd_id));
-    const sql = `UPDATE ${TABLE_MAP[product_type]} SET ${updates.join(', ')} WHERE DD_id = @p${pi}`;
-
-    await req_.query(sql);
+    if (updates.length > 0) {
+      req_.input(`p${pi}`, db.mssql.Int, parseInt(dd_id));
+      const sql = `UPDATE ${TABLE_MAP[product_type]} SET ${updates.join(', ')} WHERE DD_id = @p${pi}`;
+      await req_.query(sql);
+    }
 
     // YMGX 工序表更新（YM 的 hzl1-7 在 YMGX 表）
     if (product_type === 'YM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) {
