@@ -70,6 +70,16 @@ function buildProgress(order, productType) {
       jine1: order.jine1, jine2: order.jine2, jine3: order.jine3, jine4: order.jine4,
       jine5: order.jine5, jine6: order.jine6, jine7: order.jine7, jine8: order.jine8, jine9: order.jine9,
       jine10: order.jine10,
+      GXS: order.GXS,
+      hzlA1: order.hzlA1, hzlA2: order.hzlA2, hzlA3: order.hzlA3,
+      hzlA4: order.hzlA4, hzlA5: order.hzlA5, hzlA6: order.hzlA6,
+      hzlB3: order.hzlB3, hzlB4: order.hzlB4, hzlB5: order.hzlB5,
+      hzlB6: order.hzlB6, hzlB7: order.hzlB7, hzlB8: order.hzlB8,
+      hzlB11: order.hzlB11, hzlB12: order.hzlB12, hzlB13: order.hzlB13,
+      hzlB14: order.hzlB14, hzlB15: order.hzlB15,
+      hzlC1: order.hzlC1, hzlC3: order.hzlC3, hzlC4: order.hzlC4,
+      hzlC5: order.hzlC5, hzlC6: order.hzlC6, hzlC7: order.hzlC7,
+      hzlC8: order.hzlC8, hzlC9: order.hzlC9, hzlC10: order.hzlC10,
     };
   }
 
@@ -560,10 +570,13 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     );
     if (!order) return res.status(404).json({ error: '订单不存在' });
 
-    // YM 的 hzl1-7 在 YMGX 工序表，需要额外查询
+    // YM 的 hzl1-7 在 YMGX 工序表，YS 的 sclcClass/GXS/hzlA*/hzlB*/hzlC* 在 YSGX 表
     if (product_type === 'YM') {
       const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7 FROM YMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+    } else if (product_type === 'YS') {
+      const gx = await db.queryOne(`SELECT sclcClass, GXS, hzlA1, hzlA2, hzlA3, hzlA4, hzlA5, hzlA6, hzlB3, hzlB4, hzlB5, hzlB6, hzlB7, hzlB8, hzlB11, hzlB12, hzlB13, hzlB14, hzlB15, hzlC1, hzlC3, hzlC4, hzlC5, hzlC6, hzlC7, hzlC8, hzlC9, hzlC10 FROM YSGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
+      if (gx) Object.assign(order, gx);
     }
 
     res.json(buildProgress(order, product_type));
@@ -740,6 +753,7 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       // 工序步骤（YS 表的主表工序字段）
       'jhkdd', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
       // YS 无 hzl1-7 主表字段，工序在 YSGX 表
+      // sclcClass/sclcSteps 不在 YS 主表，只走 YSGX 逻辑（下面单独处理）
       // YS 特有（sclcClass 在 YSGX 表，不在 YS 主表）
       'ylzd', 'klcc', 'kaishu', 'xukaisl', 'bcsl',
       // 其他
@@ -863,6 +877,43 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       await gxReq.query(`UPDATE YMGX SET ${gxUpdates} WHERE DD_id=@DD_id`);
     }
 
+    // YSGX 工序表更新（YS 的 sclcClass/hzlA*/hzlB*/hzlC* 在 YSGX 表）
+    if (product_type === 'YS') {
+      const ysGxFields = {};
+      // sclcClass 单独更新（数字 1=纸盒 2=印刷单）
+      if (req.body.sclcClass !== undefined) {
+        ysGxFields.sclcClass = req.body.sclcClass ? parseInt(req.body.sclcClass) : 0;
+      }
+      // GXS 工序勾选：hzlA1-hzlA6, hzlB3-hzlB15(缺几个), hzlC1-hzlC10(缺几个)
+      const ysStepKeys = ['hzlA1','hzlA2','hzlA3','hzlA4','hzlA5','hzlA6','hzlB3','hzlB4','hzlB5','hzlB6','hzlB7','hzlB8','hzlB11','hzlB12','hzlB13','hzlB14','hzlB15','hzlC1','hzlC3','hzlC4','hzlC5','hzlC6','hzlC7','hzlC8','hzlC9','hzlC10'];
+      if (Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) {
+        const allYsStepKeys = ['hzlA1','hzlA2','hzlA3','hzlA4','hzlA5','hzlA6','hzlB3','hzlB4','hzlB5','hzlB6','hzlB7','hzlB8','hzlB11','hzlB12','hzlB13','hzlB14','hzlB15','hzlC1','hzlC3','hzlC4','hzlC5','hzlC6','hzlC7','hzlC8','hzlC9','hzlC10'];
+        allYsStepKeys.forEach(k => ysGxFields[k] = 0);
+        req.body.sclcSteps.forEach(step => {
+          if (ysStepKeys.includes(step)) ysGxFields[step] = 1;
+        });
+      }
+      if (Object.keys(ysGxFields).length > 0) {
+        // UPSERT: 记录不存在则先 INSERT
+        const result = await pool.request().input('DD_id', db.mssql.Int, parseInt(dd_id)).query('SELECT 1 FROM YSGX WHERE DD_id = @DD_id');
+        const existing = result.recordset;
+        if (!existing || existing.length === 0) {
+          const insertFields = { DD_id: parseInt(dd_id), ...ysGxFields };
+          const insertCols = Object.keys(insertFields).map(k => `[${k}]`).join(', ');
+          const insertVals = Object.keys(insertFields).map(k => `@${k}`).join(', ');
+          const insReq = pool.request();
+          Object.entries(insertFields).forEach(([k, v]) => insReq.input(k, db.mssql.Int, v));
+          await insReq.query(`INSERT INTO YSGX (${insertCols}) VALUES (${insertVals})`);
+        } else {
+          const gxUpdates = Object.keys(ysGxFields).map(k => `[${k}]=@${k}`).join(', ');
+          const gxReq = pool.request();
+          Object.entries(ysGxFields).forEach(([k, v]) => gxReq.input(k, db.mssql.Int, v));
+          gxReq.input('DD_id', db.mssql.Int, parseInt(dd_id));
+          await gxReq.query(`UPDATE YSGX SET ${gxUpdates} WHERE DD_id=@DD_id`);
+        }
+      }
+    }
+
     const order = await db.queryOne(
       `SELECT * FROM ${TABLE_MAP[product_type]} WHERE DD_id = @p0`,
       [parseInt(dd_id)]
@@ -872,6 +923,12 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     if (product_type === 'YM') {
       const gx = await db.queryOne(`SELECT hzl1,hzl2,hzl3,hzl4,hzl5,hzl6,hzl7 FROM YMGX WHERE DD_id=@p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+    }
+
+    // YSGX 查回 sclcClass/hzlA*/hzlB*/hzlC* 附加到 order 对象
+    if (product_type === 'YS') {
+      const gx = await db.queryOne(`SELECT sclcClass, GXS, hzlA1, hzlA2, hzlA3, hzlA4, hzlA5, hzlA6, hzlB3, hzlB4, hzlB5, hzlB6, hzlB7, hzlB8, hzlB11, hzlB12, hzlB13, hzlB14, hzlB15, hzlC1, hzlC3, hzlC4, hzlC5, hzlC6, hzlC7, hzlC8, hzlC9, hzlC10 FROM YSGX WHERE DD_id=@p0`, [parseInt(dd_id)]);
+      if (gx) Object.assign(order, gx);
     }
 
     res.json({ success: true, message: '订单已更新', data: buildProgress(order, product_type) });
