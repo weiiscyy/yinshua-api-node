@@ -223,9 +223,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
       klcc, kaishu, ylzd, xukaisl, bcsl, klyaoqiu, jyyaoqiu,
       proudnumber, lldate, yssj,
       // ZM 专用
-      cidiehao, allcount, weidu, kuandu, changdu, huachang, huahao,
+      allcount, weidu, kuandu, changdu, huachang, huahao,
       chenpingcc, dhdw, sxdate, soujianjl, proudbanbie,
-      zm_zhijian, gyyq,
+      zm_zhijian, gyyq, kts, jijia,
       // YM 专用
       beizhu8, upfile,
       // DS 专用
@@ -312,14 +312,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         ZM: {
           ...commonFields,
           overdate: ['overdate', db.mssql.DateTime, overdate || null],
-          cpgg: ['cpgg', db.mssql.NVarChar, cpgg || ''],
-          pingshu: ['pingshu', db.mssql.NVarChar, pingshu || ''],
           fahuodanwei: ['fahuodanwei', db.mssql.NVarChar, fahuodanwei || ''],
           kuanhao: ['kuanhao', db.mssql.NVarChar, kuanhao || ''],
-          jiagongfei: ['jiagongfei', db.mssql.NVarChar, jiagongfei || ''],
-          danjia: ['danjia', db.mssql.Money, danjia || null],
-          yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
-          cidiehao: ['cidiehao', db.mssql.NVarChar, cidiehao || ''],
+          jiagongfei: ['jiagongfei', db.mssql.NVarChar, String(jiagongfei || '')],
           allcount: ['allcount', db.mssql.NVarChar, allcount || ''],
           weidu: ['weidu', db.mssql.NVarChar, weidu || ''],
           kuandu: ['kuandu', db.mssql.NVarChar, kuandu || ''],
@@ -333,6 +328,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           zm_zhijian: ['zm_zhijian', db.mssql.NVarChar, zm_zhijian || ''],
           gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
           huahao: ['huahao', db.mssql.NVarChar, huahao || ''],
+          kts: ['kts', db.mssql.NVarChar, kts || ''],
+          jijia: ['jijia', db.mssql.NVarChar, jijia || ''],
+          // bz/bz1-bz12/qw1-qw12/ss1-ss12/cmh1-cmh10/hzl1-hzl15 由 commonFields 提供
         },
         DS: {
           ...commonFields,
