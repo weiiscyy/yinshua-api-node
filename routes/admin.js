@@ -790,7 +790,6 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
       'ysy20',
       'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
-      'hzl1', 'hzl2', 'hzl3', 'hzl4', 'hzl5', 'hzl6', 'hzl7',
       // ZM 特有
       'huahao', 'jijia', 'allcount', 'weidu', 'soujianjl', 'sxdate', 'zm_zhijian', 'proudbanbie',
       'chenpingcc', 'kuandu', 'changdu', 'huachang', 'kts', 'dhdw',
