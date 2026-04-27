@@ -332,6 +332,7 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           dhdw: ['dhdw', db.mssql.NVarChar, dhdw || ''],
           sxdate: ['sxdate', db.mssql.NVarChar, sxdate || ''],
           proudbanbie: ['proudbanbie', db.mssql.NVarChar, proudbanbie || ''],
+          proudnumber: ['proudnumber', db.mssql.NVarChar, proudnumber || ''],
           // bz/bz1-bz12/qw1-qw12/ss1-ss12/cmh1-cmh10/hzl1-hzl15 由 commonFields 提供
         },
         DS: {
