@@ -453,6 +453,18 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         }
       }
 
+      // ZM 录入后：同步 zhengli 字符串到 ZM 主表
+      if (product_type === 'ZM' && sclcSteps.length > 0) {
+        const zmLabels = { hzl1:'烫折', hzl2:'糊盒', hzl3:'覆膜', hzl4:'裱纸', hzl5:'模切', hzl6:'粘盒', hzl7:'包盒', hzl8:'钉装', hzl9:'切割', hzl10:'压线', hzl11:'冲孔', hzl12:'烫金', hzl13:'过胶', hzl14:'局部UV', hzl15:'贴盒', hzl16:'组装' };
+        const zhengli = sclcSteps.map(s => {
+          const num = s.split('-')[0].replace(/[^0-9]/g, '');
+          return zmLabels[`hzl${num}`] || s;
+        }).join(',');
+        if (zhengli) {
+          await reqT(`UPDATE ZM SET zhengli=@p0 WHERE DD_id=@p1`, [['p0', db.mssql.NVarChar, zhengli], ['p1', db.mssql.Int, newId]]);
+        }
+      }
+
       // ZM 色卡明细 qw/ss/bz, 尺码 sl/lieshu
       if (product_type === 'ZM') {
         const zmParts = [];

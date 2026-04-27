@@ -349,6 +349,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     // 45天过滤后数据量小，每表最多取 pageSize 条，JS 层归并排序
     const dataPromises = types.map(ptype => {
+      console.log('[DEBUG] ptype in dataPromises:', ptype);
       const table = TABLE_MAP[ptype];
       const fields = [
         'DD_id', 'ddbh', 'company', 'prouddate', 'overdate', 'ZT', 'fahuo', 'fahuoTime',
@@ -421,6 +422,19 @@ router.get('/', authMiddleware, async (req, res) => {
             rows.forEach(r => {
               const gx = gxMap[r.DD_id];
               if (gx) { for (let i = 1; i <= 7; i++) r[`hzl${i}`] = gx[`hzl${i}`]; }
+            });
+            return rows.map(order => buildProgress(order, ptype));
+          });
+        }
+        // ZM 的 hzl1-16 在 ZMGX 工序表
+        if (ptype === 'ZM' && rows.length > 0) {
+          const ids = rows.map(r => r.DD_id);
+          return db.query(`SELECT DD_id, hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7, hzl8, hzl9, hzl10, hzl11, hzl12, hzl13, hzl14, hzl15, hzl16 FROM ZMGX WHERE DD_id IN (${ids.map((_, i) => `@p${i}`).join(',')})`, ids).then(zmgxResult => {
+            const gxMap = {};
+            zmgxResult.forEach(g => { gxMap[g.DD_id] = g; });
+            rows.forEach(r => {
+              const gx = gxMap[r.DD_id];
+              if (gx) { for (let i = 1; i <= 16; i++) r[`hzl${i}`] = gx[`hzl${i}`]; }
             });
             return rows.map(order => buildProgress(order, ptype));
           });
@@ -885,6 +899,32 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       await gxReq.query(`UPDATE YMGX SET ${gxUpdates} WHERE DD_id=@DD_id`);
     }
 
+    // ZMGX 工序表更新（ZM 的 hzl1-16 在 ZMGX 表）
+    if (product_type === 'ZM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) {
+      const gxFields = { DD_id: parseInt(dd_id) };
+      for (let i = 1; i <= 16; i++) gxFields[`hzl${i}`] = 0;
+      req.body.sclcSteps.forEach(step => {
+        const num = step.split('-')[0].replace(/[^0-9]/g, '');
+        if (num) gxFields[`hzl${num}`] = 1;
+      });
+      // UPSERT: 记录不存在则先 INSERT
+      const result = await pool.request().input('DD_id', db.mssql.Int, parseInt(dd_id)).query('SELECT 1 FROM ZMGX WHERE DD_id = @DD_id');
+      const existing = result.recordset;
+      if (!existing || existing.length === 0) {
+        const insertFields = { DD_id: parseInt(dd_id), ...gxFields };
+        const insertCols = Object.keys(insertFields).map(k => `[${k}]`).join(', ');
+        const insertVals = Object.keys(insertFields).map(k => `@${k}`).join(', ');
+        const insReq = pool.request();
+        Object.entries(insertFields).forEach(([k, v]) => insReq.input(k, db.mssql.Int, v));
+        await insReq.query(`INSERT INTO ZMGX (${insertCols}) VALUES (${insertVals})`);
+      } else {
+        const gxUpdates = Object.keys(gxFields).map(k => `[${k}]=@${k}`).join(', ');
+        const gxReq = pool.request();
+        Object.entries(gxFields).forEach(([k, v]) => gxReq.input(k, db.mssql.Int, v));
+        await gxReq.query(`UPDATE ZMGX SET ${gxUpdates} WHERE DD_id=@DD_id`);
+      }
+    }
+
     // YSGX 工序表更新（YS 的 sclcClass/hzlA*/hzlB*/hzlC* 在 YSGX 表）
     if (product_type === 'YS') {
       const ysGxFields = {};
@@ -931,6 +971,12 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     if (product_type === 'YM') {
       const gx = await db.queryOne(`SELECT hzl1,hzl2,hzl3,hzl4,hzl5,hzl6,hzl7 FROM YMGX WHERE DD_id=@p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+    }
+
+    // ZMGX 查回 hzl1-16 附加到 order 对象
+    if (product_type === 'ZM') {
+      const gx = await db.queryOne(`SELECT hzl1,hzl2,hzl3,hzl4,hzl5,hzl6,hzl7,hzl8,hzl9,hzl10,hzl11,hzl12,hzl13,hzl14,hzl15,hzl16 FROM ZMGX WHERE DD_id=@p0`, [parseInt(dd_id)]);
+      if (gx) { for (let i = 1; i <= 16; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
     }
 
     // YSGX 查回 sclcClass/hzlA*/hzlB*/hzlC* 附加到 order 对象
