@@ -133,12 +133,23 @@ function buildProgress(order, productType) {
     }
     const zmSize = {};
     for (let i = 1; i <= 10; i++) {
+      zmSize[`cmh${i}`] = order[`cmh${i}`];
       zmSize[`sl${i}`] = order[`sl${i}`];
       zmSize[`lieshu${i}`] = order[`lieshu${i}`];
     }
     return {
       ...base,
+      prouddate: order.prouddate ? new Date(order.prouddate).toISOString() : null,
+      overdate: order.overdate ? new Date(order.overdate).toISOString() : null,
+      ddbh: order.ddbh,
+      zhidan: order.zhidan,
       shuliang: order.shuliang,
+      dhdw: order.dhdw,
+      yjbhao: order.yjbhao,
+      cpgg: order.cpgg,
+      pingshu: order.pingshu,
+      proudbanbie: order.proudbanbie,
+      proudnumber: order.proudnumber,
       huahao: order.huahao,
       cidiehao: order.cidiehao,
       kuanhao: order.kuanhao,
@@ -147,15 +158,62 @@ function buildProgress(order, productType) {
       huachang: order.huachang,
       weidu: order.weidu,
       chenpingcc: order.chenpingcc,
+      kts: order.kts,
+      sxdate: order.sxdate,
       gyyq: order.gyyq,
+      jyyaoqiu: order.jyyaoqiu,
       jiagongfei: order.jiagongfei,
       jijia: order.jijia,
+      allcount: order.allcount,
       beizhuZM: order.beizhuZM,
+      beizhu8: order.beizhu8,
+      beizhu1: order.beizhu1,
+      beizhu2: order.beizhu2,
+      beizhu3: order.beizhu3,
+      beizhu4: order.beizhu4,
+      beizhu5: order.beizhu5,
       soujianjl: order.soujianjl,
       zhengli: order.zhengli,
       ywy: order.ywy,
+      company: order.company,
       fahuodanwei: order.fahuodanwei,
+      waifa: order.waifa,
+      danjia: order.danjia,
+      sydazhang: order.sydazhang,
+      syMoney: order.syMoney,
+      yszj: order.yszj,
+      zm_zhijian: order.zm_zhijian,
+      // 金额数组
+      jine1: order.jine1, jine2: order.jine2, jine3: order.jine3, jine4: order.jine4,
+      jine5: order.jine5, jine6: order.jine6, jine7: order.jine7, jine8: order.jine8,
+      jine9: order.jine9, jine10: order.jine10,
+      yssl1: order.yssl1, yssl2: order.yssl2, yssl3: order.yssl3, yssl4: order.yssl4,
+      yssl5: order.yssl5, yssl6: order.yssl6, yssl7: order.yssl7, yssl8: order.yssl8,
+      yssl9: order.yssl9,
+      yss20: order.yss20,
+      ysdw1: order.ysdw1, ysdw2: order.ysdw2, ysdw3: order.ysdw3, ysdw4: order.ysdw4,
+      ysdw5: order.ysdw5, ysdw6: order.ysdw6, ysdw7: order.ysdw7, ysdw8: order.ysdw8,
+      ysdw9: order.ysdw9, ysdw10: order.ysdw10,
+      ysyl1: order.ysyl1, ysyl2: order.ysyl2, ysyl3: order.ysyl3, ysyl4: order.ysyl4,
+      ysyl5: order.ysyl5, ysyl6: order.ysyl6, ysyl7: order.ysyl7, ysyl8: order.ysyl8,
+      ysyl9: order.ysyl9,
+      ysy20: order.ysy20,
+      // 工序状态
+      jhkddClass: order.jhkddClass,
+      jhkprint: order.jhkprint,
+      sccjjs: order.sccjjs, sccjyl: order.sccjyl, sccjdn: order.sccjdn,
+      sccjsc: order.sccjsc, sccjwc: order.sccjwc,
+      hzljs: order.hzljs,
+      // ZMGX 工序表 hzl1-16
+      ...(function(){
+        const o = {};
+        for(let i=1;i<=16;i++) o[`hzl${i}`] = order[`hzl${i}`];
+        return o;
+      })(),
+      fahuo: order.fahuo,
+      // 色卡
       ...zmColor,
+      // 尺码（cmh/sl/lieshu）
       ...zmSize,
     };
   }
@@ -584,13 +642,16 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     );
     if (!order) return res.status(404).json({ error: '订单不存在' });
 
-    // YM 的 hzl1-7 在 YMGX 工序表，YS 的 sclcClass/GXS/hzlA*/hzlB*/hzlC* 在 YSGX 表
+    // YM 的 hzl1-7 在 YMGX 工序表，YS 的 sclcClass/GXS/hzlA*/hzlB*/hzlC* 在 YSGX 表，ZM 的 hzl1-16 在 ZMGX 表
     if (product_type === 'YM') {
       const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7 FROM YMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
     } else if (product_type === 'YS') {
       const gx = await db.queryOne(`SELECT sclcClass, GXS, hzlA1, hzlA2, hzlA3, hzlA4, hzlA5, hzlA6, hzlB3, hzlB4, hzlB5, hzlB6, hzlB7, hzlB8, hzlB11, hzlB12, hzlB13, hzlB14, hzlB15, hzlC1, hzlC3, hzlC4, hzlC5, hzlC6, hzlC7, hzlC8, hzlC9, hzlC10 FROM YSGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) Object.assign(order, gx);
+    } else if (product_type === 'ZM') {
+      const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7, hzl8, hzl9, hzl10, hzl11, hzl12, hzl13, hzl14, hzl15, hzl16 FROM ZMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
+      if (gx) { for (let i = 1; i <= 16; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
     }
 
     res.json(buildProgress(order, product_type));
@@ -792,27 +853,26 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       // 其他
       'UpFile', 'ylzd', 'proudbanbie',
     ] : product_type === 'ZM' ? [
-      'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
-      'company', 'fahuodanwei', 'kuanhao', 'proudnumber', 'ywy',
-      'beizhuZM', 'beizhu8',
-      'jyyaoqiu', 'gyyq',
-      'danjia', 'sydazhang', 'syMoney', 'yszj',
-      'jiagongfei', 'waifa', 'zhengli',
-      'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9', 'jine10',
-      'yssl1', 'yssl2', 'yssl3', 'yssl4', 'yssl5', 'yssl6', 'yssl7', 'yssl8', 'yssl9',
-      'yss20', 'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9', 'ysdw10',
-      'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
-      'ysy20',
-      'jhkddClass', 'jhkprint', 'sccjjs', 'sccjyl', 'sccjdn', 'sccjsc', 'sccjwc', 'hzljs', 'fahuo',
-      // ZM 特有
-      'huahao', 'jijia', 'allcount', 'weidu', 'soujianjl', 'sxdate', 'zm_zhijian', 'proudbanbie',
-      'chenpingcc', 'kuandu', 'changdu', 'huachang', 'kts', 'dhdw',
-      // ZM 尺寸数组(cmh/sl/lieshu各10个)
+      // ZM 表实际列（基于 INFORMATION_SCHEMA.COLUMNS）
+      'prouddate', 'overdate', 'shuliang', 'zhidan', 'huahao', 'shuliang',
+      'cidiehao', 'kuanhao', 'fahuodanwei', 'chenpingcc', 'jiagongfei', 'company',
+      'proudbanbie', 'sxdate', 'allcount', 'gyyq', 'weidu',
+      'kuandu', 'changdu', 'huachang', 'kts',
+      // 色卡明细(千纬QW/色纱SS/备注BZ各12个)
+      'qw1','qw2','qw3','qw4','qw5','qw6','qw7','qw8','qw9','qw10','qw11','qw12',
+      'ss1','ss2','ss3','ss4','ss5','ss6','ss7','ss8','ss9','ss10','ss11','ss12',
+      'bz1','bz2','bz3','bz4','bz5','bz6','bz7','bz8','bz9','bz10','bz11','bz12',
+      // 尺码明细(cmh/sl/lieshu各10个)
       'cmh1','cmh2','cmh3','cmh4','cmh5','cmh6','cmh7','cmh8','cmh9','cmh10',
       'sl1','sl2','sl3','sl4','sl5','sl6','sl7','sl8','sl9','sl10',
       'lieshu1','lieshu2','lieshu3','lieshu4','lieshu5','lieshu6','lieshu7','lieshu8','lieshu9','lieshu10',
-      // 其他
-      'UpFile', 'beizhu1', 'beizhu2', 'beizhu3', 'beizhu4', 'beizhu5',
+      'zhengli', 'fhdw', 'fhdate', 'fhr', 'zm_zhijian', 'jijia', 'ywy',
+      // 工序步骤
+      'jhkddClass', 'jhkddTime', 'jhkprint', 'jhkprintTime',
+      'sccjjs', 'sccjjsTime', 'sccjyl', 'sccjylTime',
+      'sccjdn', 'sccjdnTime', 'sccjsc', 'sccjscTime', 'sccjwc', 'sccjwcTime',
+      'hzljs', 'hzljsTime', 'fahuo', 'fahuoTime',
+      'BZ', 'BZBM', 'BZSM', 'UpFile', 'dhdw', 'soujianjl', 'waifa', 'waifaprint', 'fahuo_id',
     ] : [
       // DS 通用（不区分特有，全部列出）
       'prouddate', 'overdate', 'shuliang', 'yjbhao', 'cpgg', 'pingshu',
@@ -874,7 +934,7 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
       }
     }
 
-    if (updates.length === 0 && product_type !== 'YS' && !(product_type === 'YM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0)) {
+    if (updates.length === 0 && product_type !== 'YS' && !(product_type === 'YM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) && !(product_type === 'ZM')) {
       return res.status(400).json({ error: '没有有效的更新字段' });
     }
 
@@ -900,13 +960,13 @@ router.patch('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     }
 
     // ZMGX 工序表更新（ZM 的 hzl1-16 在 ZMGX 表）
-    if (product_type === 'ZM' && Array.isArray(req.body.sclcSteps) && req.body.sclcSteps.length > 0) {
+    // 直接从 req.body 读取 hzl1-16 字段（前端表单复选框直接提交这些字段）
+    if (product_type === 'ZM') {
       const gxFields = { DD_id: parseInt(dd_id) };
-      for (let i = 1; i <= 16; i++) gxFields[`hzl${i}`] = 0;
-      req.body.sclcSteps.forEach(step => {
-        const num = step.split('-')[0].replace(/[^0-9]/g, '');
-        if (num) gxFields[`hzl${num}`] = 1;
-      });
+      for (let i = 1; i <= 16; i++) {
+        const v = req.body[`hzl${i}`];
+        gxFields[`hzl${i}`] = (v === true || v === 1 || v === 'true' || v === '1') ? 1 : 0;
+      }
       // UPSERT: 记录不存在则先 INSERT
       const result = await pool.request().input('DD_id', db.mssql.Int, parseInt(dd_id)).query('SELECT 1 FROM ZMGX WHERE DD_id = @DD_id');
       const existing = result.recordset;
