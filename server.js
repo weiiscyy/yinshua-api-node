@@ -41,6 +41,26 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/query', require('./routes/query'));
 app.use('/api/production', require('./routes/production'));
 
+// 开发记录（.md 渲染为 HTML）
+app.get('/changelog', (req, res) => {
+  const fs = require('fs');
+  const mdPath = path.join(__dirname, '../印刷订单管理系统-开发记录.md');
+  const content = fs.existsSync(mdPath) ? fs.readFileSync(mdPath, 'utf8') : '# 开发记录\n\n文件不存在。';
+  // 简单转换：标题 + 列表 + 粗体 + 链接
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>开发记录</title><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;background:#f5f7fa;color:#333}
+    h1{background:#1677ff;color:#fff;padding:16px 24px;border-radius:6px;margin-bottom:24px}
+    h2{color:#1677ff;margin-top:32px;border-bottom:2px solid #e6f4ff;padding-bottom:8px}
+    h3{color:#555;margin-top:20px}
+    code{background:#f0f0f0;padding:2px 6px;border-radius:3px}
+    pre{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:6px;overflow-x:auto;font-size:13px}
+    ul{line-height:2}
+    strong{color:#c0392b}
+    .meta{color:#888;font-size:12px}
+  </style></head><body>${content.replace(/^# (.+)$/gm,'<h1>$1</h1>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/^- (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/s,'<ul>$1</ul>').replace(/\n{3,}/g,'\n\n')}</body></html>`;
+  res.send(html);
+});
+
 // Static files (production build)
 const staticPath = path.join(__dirname, '../yinshua-admin/dist');
 app.use(express.static(staticPath));
