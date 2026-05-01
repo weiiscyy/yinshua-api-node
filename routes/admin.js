@@ -28,6 +28,7 @@ function buildProgress(order, productType) {
     prouddate: order.prouddate ? new Date(order.prouddate).toISOString() : null,
     overdate: order.overdate ? new Date(order.overdate).toISOString() : null,
     ywy: order.ywy,
+    ywy_name: order.ywy_name || null,
     zhidan: order.zhidan,
   };
 
@@ -45,6 +46,7 @@ function buildProgress(order, productType) {
       fahuodanwei: order.fahuodanwei,
       jiagongfei: order.jiagongfei,
       waifa: order.waifa,
+      waifaprint: order.waifaprint,
       beizhu: order.beizhuYS,
       beizhuYS: order.beizhuYS,
       sclcClass: order.sclcClass,
@@ -649,6 +651,12 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     } else if (product_type === 'YS') {
       const gx = await db.queryOne(`SELECT sclcClass, GXS, hzlA1, hzlA2, hzlA3, hzlA4, hzlA5, hzlA6, hzlB3, hzlB4, hzlB5, hzlB6, hzlB7, hzlB8, hzlB11, hzlB12, hzlB13, hzlB14, hzlB15, hzlC1, hzlC3, hzlC4, hzlC5, hzlC6, hzlC7, hzlC8, hzlC9, hzlC10 FROM YSGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) Object.assign(order, gx);
+      // join UserInfo 取 ywy 姓名
+      if (order.ywy != null) {
+        const ywyId = parseInt(order.ywy, 10);
+        const u = await db.queryOne(`SELECT UserName FROM UserInfo WHERE Userid = @p0`, [ywyId]);
+        order.ywy_name = u ? u.UserName : `未知(${ywyId})`;
+      }
     } else if (product_type === 'ZM') {
       const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7, hzl8, hzl9, hzl10, hzl11, hzl12, hzl13, hzl14, hzl15, hzl16 FROM ZMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 16; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }

@@ -301,6 +301,7 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           proudnumber: ['proudnumber', db.mssql.NVarChar, proudnumber || ''],
           lldate: ['lldate', db.mssql.DateTime, lldate || null],
           zhengli: ['zhengli', db.mssql.NVarChar, zhengli || ''],
+          yss20: ['yss20', db.mssql.NVarChar, body.yss20 || ''],
           gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
           yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
           ylzd: ['ylzd', db.mssql.NVarChar, ylzd || ''],
@@ -398,6 +399,30 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         const gxParams = gxCols.map((k, i) => [gxPnames[i], db.mssql.Int, gxFields[k]]);
         const gxInsert = `INSERT INTO ${gxTable} (${gxCols.join(',')}) VALUES (${gxPnames.map(p => '@' + p).join(',')})`;
         await reqT(gxInsert, gxParams);
+
+        // YS 整理环节 zhengli：根据勾选的 hzlA/hzlB/hzlC 字段，拼接中文汇总字符串写回 YS 主表
+        if (product_type === 'YS' && sclcSteps.length > 0) {
+          const zhengliLabels = {
+            hzlA1: '单面光膜', hzlA2: '单面亚膜', hzlA3: '双面光膜', hzlA4: '双面亚膜',
+            hzlA5: '单面专用膜', hzlA6: '双面专用膜',
+            hzlC3: '外加工压光',
+            hzlB3: '烫金', hzlB4: '压钢刀', hzlB5: '穿线', hzlB6: '糊纸粘合',
+            hzlB7: '打汽眼', hzlB8: '凹凸', hzlB11: '激光切割', hzlB12: '穿别针',
+            hzlB13: '路线', hzlB14: '敲柳钉', hzlB15: '包边',
+            hzlC1: '局部丝网印', hzlC4: '绣花', hzlC5: '烫钻', hzlC6: '胶印上光',
+            hzlC7: '粘备用袋', hzlC8: '揉皱', hzlC9: '敲毛边', hzlC10: '其它',
+          };
+          const zhengli = sclcSteps
+            .map(f => zhengliLabels[f])
+            .filter(Boolean)
+            .join('');
+          if (zhengli) {
+            await reqT(`UPDATE YS SET zhengli=@p0 WHERE DD_id=@p1`, [
+              ['p0', db.mssql.NVarChar, zhengli],
+              ['p1', db.mssql.Int, newId],
+            ]);
+          }
+        }
       }
 
       // YS 印刷色数明细（yssl1-9, jine1-9, yss20, jine10, yszj）
@@ -453,9 +478,31 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         }
       }
 
+      // YM 录入后：同步 zhengli 字符串到 YM 主表
+      // 标签来自旧系统 YMinput_Add.asp L313-347：烘色牢度/切割/超声波切割/手工切折/手工对折/其它/三角折
+      // 前端传 sclcSteps 格式为 hzl1-晒版/hzl2-显影...，hzl1/hzl2/hzl3/hzl4/hzl5/hzl6/hzl7
+      if (product_type === 'YM' && sclcSteps.length > 0) {
+        const ymLabels = {
+          hzl1: '烘色牢度', hzl2: '切割', hzl3: '超声波切割',
+          hzl4: '手工切折', hzl5: '手工对折', hzl6: '其它', hzl7: '三角折'
+        };
+        const zhengli = sclcSteps.map(s => {
+          const num = s.split('-')[0].replace(/[^0-9]/g, '');
+          return ymLabels[`hzl${num}`] || s;
+        }).join(',');
+        if (zhengli) {
+          await reqT(`UPDATE YM SET zhengli=@p0 WHERE DD_id=@p1`, [['p0', db.mssql.NVarChar, zhengli], ['p1', db.mssql.Int, newId]]);
+        }
+      }
+
       // ZM 录入后：同步 zhengli 字符串到 ZM 主表
+      // 标签来自 ZMinput_Add.asp L308-387：切折/三角折/对折/切割/超声波/热切粘衬/包边/卷装/留样/热切/划口/充棉/打汽眼/踩线/烫钻/盒装
       if (product_type === 'ZM' && sclcSteps.length > 0) {
-        const zmLabels = { hzl1:'烫折', hzl2:'糊盒', hzl3:'覆膜', hzl4:'裱纸', hzl5:'模切', hzl6:'粘盒', hzl7:'包盒', hzl8:'钉装', hzl9:'切割', hzl10:'压线', hzl11:'冲孔', hzl12:'烫金', hzl13:'过胶', hzl14:'局部UV', hzl15:'贴盒', hzl16:'组装' };
+        const zmLabels = {
+          hzl1:'切折', hzl2:'三角折', hzl3:'对折', hzl4:'切割', hzl5:'超声波',
+          hzl6:'热切粘衬', hzl7:'包边', hzl8:'卷装', hzl9:'留样', hzl10:'热切',
+          hzl11:'划口', hzl12:'充棉', hzl13:'打汽眼', hzl14:'踩线', hzl15:'烫钻', hzl16:'盒装'
+        };
         const zhengli = sclcSteps.map(s => {
           const num = s.split('-')[0].replace(/[^0-9]/g, '');
           return zmLabels[`hzl${num}`] || s;
@@ -465,16 +512,48 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         }
       }
 
-      // ZM 色卡明细 qw/ss/bz, 尺码 sl/lieshu
+      // ZM 色卡明细 qw1-qw12(千纬)/ss1-ss12(色纱)/bz1-bz12(备注)
+      // ZM 尺码号 cmh1-cmh10
+      // ZM 数量 sl1-sl10 / 列数 lieshu1-lieshu10
       if (product_type === 'ZM') {
         const zmParts = [];
         const zmParams = [];
         let pi = 0;
+        // 色卡：千纬/色纱/备注，每组 i=1~12
         for (let i = 1; i <= 12; i++) {
-          if (body[`qw${i}`]) { zmParts.push(`qw${i}=@p${pi}`, `ss${i}=@p${pi+1}`, `bz${i}=@p${pi+2}`); zmParams.push(...[[`p${pi}`,db.mssql.NVarChar,body[`qw${i}`]],[`p${pi+1}`,db.mssql.NVarChar,body[`ss${i}`]],[`p${pi+2}`,db.mssql.NVarChar,body[`bz${i}`]]]); pi += 3; }
+          if (body[`qw${i}`]) {
+            zmParts.push(`qw${i}=@p${pi}`, `ss${i}=@p${pi+1}`, `bz${i}=@p${pi+2}`);
+            zmParams.push(
+              [`p${pi}`, db.mssql.NVarChar, body[`qw${i}`] || ''],
+              [`p${pi+1}`, db.mssql.NVarChar, body[`ss${i}`] || ''],
+              [`p${pi+2}`, db.mssql.NVarChar, body[`bz${i}`] || '']
+            );
+            pi += 3;
+          }
         }
+        // 尺码号 cmh1~cmh10（独立UPDATE，不与其他字段同行）
         for (let i = 1; i <= 10; i++) {
-          if (body[`sl${i}`]) { zmParts.push(`sl${i}=@p${pi}`, `lieshu${i}=@p${pi+1}`); zmParams.push(...[[`p${pi}`,db.mssql.NVarChar,body[`sl${i}`]],[`p${pi+1}`,db.mssql.NVarChar,body[`lieshu${i}`]]]); pi += 2; }
+          if (body[`cmh${i}`] !== undefined && body[`cmh${i}`] !== null && body[`cmh${i}`] !== '') {
+            zmParts.push(`cmh${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`cmh${i}`] || '']);
+            pi += 1;
+          }
+        }
+        // 数量 sl1~sl10（独立UPDATE）
+        for (let i = 1; i <= 10; i++) {
+          if (body[`sl${i}`] !== undefined && body[`sl${i}`] !== null && body[`sl${i}`] !== '') {
+            zmParts.push(`sl${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`sl${i}`] || '']);
+            pi += 1;
+          }
+        }
+        // 列数 lieshu1~lieshu10（独立UPDATE）
+        for (let i = 1; i <= 10; i++) {
+          if (body[`lieshu${i}`] !== undefined && body[`lieshu${i}`] !== null && body[`lieshu${i}`] !== '') {
+            zmParts.push(`lieshu${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`lieshu${i}`] || '']);
+            pi += 1;
+          }
         }
         if (zmParts.length > 0) {
           zmParams.push([`p${pi}`, db.mssql.Int, newId]);
@@ -487,6 +566,85 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   } catch (err) {
     console.error('ORDER ENTRY ERROR:', err.message);
     res.status(500).json({ error: '创建订单失败', detail: err.message });
+  }
+});
+
+// 各产品线查询字段映射
+const COPY_LIST_FIELDS = {
+  YS:  ['DD_id','ddbh','company','prouddate','yjbhao','kuanhao','yszj','shuliang'],
+  YM:  ['DD_id','ddbh','company','prouddate','yjbhao','kuanhao','yszj','shuliang'],
+  ZM:  ['DD_id','ddbh','company','prouddate','huahao','proudnumber','jijia','shuliang'],
+  DS:  ['DD_id','ddbh','company','prouddate','yjbhao','yszj','shuliang'],
+};
+
+// router 已在文件顶部定义，无需重新 const router = express.Router();
+// 此处直接使用文件中已有的 router 实例
+
+router.get('/copy-list', authMiddleware, async (req, res) => {
+  try {
+    const {
+      product_type,   // YS|YM|ZM|DS
+      company,        // 客户名称（模糊）
+      start_date,     // 制单日期起
+      end_date,       // 制单日期止
+      yjbhao,         // 印件编号（YS/YM/DS）
+      kuanhao,        // 款号（YS/YM）
+      huahao,         // 花号（ZM）
+      proudnumber,    // 生产机型（ZM）
+      page = 1,
+      page_size = 20,
+    } = req.query;
+
+    if (!product_type) {
+      return res.status(400).json({ error: '请选择订单类型' });
+    }
+
+    const table = product_type.toUpperCase();
+    if (!COPY_LIST_FIELDS[table]) {
+      return res.status(400).json({ error: '无效的订单类型' });
+    }
+
+    const fields = COPY_LIST_FIELDS[table].join(', ');
+    let sql = `SELECT TOP ${parseInt(page_size)} ${fields} FROM ${table} WHERE 1=1`;
+    const params = [];
+
+    if (company) {
+      sql += ` AND company LIKE @p${params.length}`;
+      params.push(`%${company.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+    }
+    if (start_date) {
+      sql += ` AND prouddate >= @p${params.length}`;
+      params.push(start_date);
+    }
+    if (end_date) {
+      sql += ` AND prouddate <= @p${params.length}`;
+      params.push(end_date);
+    }
+    if (yjbhao) {
+      sql += ` AND yjbhao LIKE @p${params.length}`;
+      params.push(`%${yjbhao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+    }
+    if (kuanhao) {
+      sql += ` AND kuanhao LIKE @p${params.length}`;
+      params.push(`%${kuanhao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+    }
+    if (huahao) {
+      sql += ` AND huahao LIKE @p${params.length}`;
+      params.push(`%${huahao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+    }
+    if (proudnumber) {
+      sql += ` AND proudnumber LIKE @p${params.length}`;
+      params.push(`%${proudnumber.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+    }
+
+    // 精确 dd_id 排序，日期降序
+    sql += ' ORDER BY DD_id DESC';
+
+    const rows = await db.query(sql, params);
+    res.json({ items: rows, product_type: table });
+  } catch (err) {
+    console.error('[copy-list] error:', err.message);
+    res.status(500).json({ error: '查询失败', detail: err.message });
   }
 });
 
