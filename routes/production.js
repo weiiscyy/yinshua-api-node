@@ -420,12 +420,28 @@ router.post('/report', authMiddleware, async (req, res) => {
 
     const newId = insertResult.newId;
 
-    // 注意：报工只记录产量，不自动完工工序
-    // 工序完工需要在订单详情页单独操作
+    // ── P0-1：工序自动完工 ──
+    // 当该工序报产总量达到订单总量时，自动标记工序完成
+    let stepCompleted = false;
+    let nextStep = null;
+    if (afterReport >= orderShuliang) {
+      await db.query(
+        `UPDATE ${TABLE_MAP[product_type]} SET ${gongxu_field}Time = GETDATE() WHERE DD_id = @p0`,
+        [parseInt(dd_id)]
+      );
+      stepCompleted = true;
+
+      // 查找下一工序
+      const stepsForType = getStepsForType(product_type);
+      const currentIdx = stepsForType.findIndex(s => s.field === gongxu_field);
+      if (currentIdx >= 0 && currentIdx < stepsForType.length - 1) {
+        nextStep = stepsForType[currentIdx + 1];
+      }
+    }
 
     res.json({
       success: true,
-      message: '报工成功',
+      message: stepCompleted ? '报工成功，工序已完工 ✓' : '报工成功',
       data: {
         id: newId,
         dd_id: parseInt(dd_id),
@@ -441,6 +457,8 @@ router.post('/report', authMiddleware, async (req, res) => {
         total_reported: afterReport,
         remain: Math.max(0, orderShuliang - afterReport),
         all_reported: afterReport >= orderShuliang,
+        step_completed: stepCompleted,      // P0-1：工序是否刚被标记完成
+        next_step: nextStep ? { field: nextStep.field, label: nextStep.label } : null, // P0-1：下一工序
       },
     });
   } catch (err) {
