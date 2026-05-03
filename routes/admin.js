@@ -438,6 +438,7 @@ router.get('/', authMiddleware, async (req, res) => {
         'ysdw1', 'ysdw2', 'ysdw3', 'ysdw4', 'ysdw5', 'ysdw6', 'ysdw7', 'ysdw8', 'ysdw9',
         'ysyl1', 'ysyl2', 'ysyl3', 'ysyl4', 'ysyl5', 'ysyl6', 'ysyl7', 'ysyl8', 'ysyl9',
         'jine1', 'jine2', 'jine3', 'jine4', 'jine5', 'jine6', 'jine7', 'jine8', 'jine9',
+        'beizhu8',
       );
       if (ptype === 'ZM') fields.push(
         'shuliang', 'fahuodanwei', 'jiagongfei', 'waifa',
@@ -449,7 +450,7 @@ router.get('/', authMiddleware, async (req, res) => {
       );
 
       // 45天过滤后数据量小，每表 TOP pageSize，JS 层归并后取 offset ~ offset+pageSize
-      let sql = `SELECT TOP ${pageSize} ${fields.join(',')} FROM ${table} WHERE 1=1`;
+      let sql = `SELECT TOP ${pageSize} ${fields.join(',')}, u.UserName as ywy_name FROM ${table} t LEFT JOIN UserInfo u ON u.Userid = t.ywy WHERE 1=1`;
       const params = [];
 
       // 45天内订单
@@ -648,6 +649,12 @@ router.get('/:product_type/:dd_id', authMiddleware, async (req, res) => {
     if (product_type === 'YM') {
       const gx = await db.queryOne(`SELECT hzl1, hzl2, hzl3, hzl4, hzl5, hzl6, hzl7 FROM YMGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) { for (let i = 1; i <= 7; i++) order[`hzl${i}`] = gx[`hzl${i}`]; }
+      // join UserInfo 取 ywy 姓名
+      if (order.ywy != null) {
+        const ywyId = parseInt(order.ywy, 10);
+        const u = await db.queryOne(`SELECT UserName FROM UserInfo WHERE Userid = @p0`, [ywyId]);
+        order.ywy_name = u ? u.UserName : `未知(${ywyId})`;
+      }
     } else if (product_type === 'YS') {
       const gx = await db.queryOne(`SELECT sclcClass, GXS, hzlA1, hzlA2, hzlA3, hzlA4, hzlA5, hzlA6, hzlB3, hzlB4, hzlB5, hzlB6, hzlB7, hzlB8, hzlB11, hzlB12, hzlB13, hzlB14, hzlB15, hzlC1, hzlC3, hzlC4, hzlC5, hzlC6, hzlC7, hzlC8, hzlC9, hzlC10 FROM YSGX WHERE DD_id = @p0`, [parseInt(dd_id)]);
       if (gx) Object.assign(order, gx);
