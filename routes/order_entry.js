@@ -583,14 +583,14 @@ const COPY_LIST_FIELDS = {
 router.get('/copy-list', authMiddleware, async (req, res) => {
   try {
     const {
-      product_type,   // YS|YM|ZM|DS
-      company,        // 客户名称（模糊）
-      start_date,     // 制单日期起
-      end_date,       // 制单日期止
-      yjbhao,         // 印件编号（YS/YM/DS）
-      kuanhao,        // 款号（YS/YM）
-      huahao,         // 花号（ZM）
-      proudnumber,    // 生产机型（ZM）
+      product_type,
+      company,
+      start_date,
+      end_date,
+      yjbhao,
+      kuanhao,
+      huahao,
+      proudnumber,
       page = 1,
       page_size = 20,
     } = req.query;
@@ -604,44 +604,57 @@ router.get('/copy-list', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '无效的订单类型' });
     }
 
-    const fields = COPY_LIST_FIELDS[table].join(', ');
-    let sql = `SELECT TOP ${parseInt(page_size)} ${fields} FROM ${table} WHERE 1=1`;
+    // 构建 WHERE 条件和参数
+    const conditions = [];
     const params = [];
 
     if (company) {
-      sql += ` AND company LIKE @p${params.length}`;
-      params.push(`%${company.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+      conditions.push(`company LIKE @p${params.length}`);
+      params.push(`%${company.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
     }
     if (start_date) {
-      sql += ` AND prouddate >= @p${params.length}`;
+      conditions.push(`prouddate >= @p${params.length}`);
       params.push(start_date);
     }
     if (end_date) {
-      sql += ` AND prouddate <= @p${params.length}`;
+      conditions.push(`prouddate <= @p${params.length}`);
       params.push(end_date);
     }
     if (yjbhao) {
-      sql += ` AND yjbhao LIKE @p${params.length}`;
-      params.push(`%${yjbhao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+      conditions.push(`yjbhao LIKE @p${params.length}`);
+      params.push(`%${yjbhao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
     }
     if (kuanhao) {
-      sql += ` AND kuanhao LIKE @p${params.length}`;
-      params.push(`%${kuanhao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+      conditions.push(`kuanhao LIKE @p${params.length}`);
+      params.push(`%${kuanhao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
     }
     if (huahao) {
-      sql += ` AND huahao LIKE @p${params.length}`;
-      params.push(`%${huahao.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+      conditions.push(`huahao LIKE @p${params.length}`);
+      params.push(`%${huahao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
     }
     if (proudnumber) {
-      sql += ` AND proudnumber LIKE @p${params.length}`;
-      params.push(`%${proudnumber.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`);
+      conditions.push(`proudnumber LIKE @p${params.length}`);
+      params.push(`%${proudnumber.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
     }
 
-    // 精确 dd_id 排序，日期降序
-    sql += ' ORDER BY DD_id DESC';
+    const whereStr = conditions.length ? 'WHERE ' + conditions.join(' AND ') : 'WHERE 1=1';
+
+    // 分页
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = Math.min(200, Math.max(1, parseInt(page_size) || 20));
+    const offset = (pageNum - 1) * pageSizeNum;
+
+    // 查总数
+    const countR = await db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} ${whereStr}`, params);
+    const total = countR.cnt;
+
+    // 数据（OFFSET FETCH 分页）
+    const fields = COPY_LIST_FIELDS[table].join(', ');
+    const sql = `SELECT ${fields} FROM ${table} ${whereStr} ORDER BY DD_id DESC OFFSET @p${params.length} ROWS FETCH NEXT @p${params.length + 1} ROWS ONLY`;
+    params.push(offset, pageSizeNum);
 
     const rows = await db.query(sql, params);
-    res.json({ items: rows, product_type: table });
+    res.json({ total, page: pageNum, page_size: pageSizeNum, items: rows, product_type: table });
   } catch (err) {
     console.error('[copy-list] error:', err.message);
     res.status(500).json({ error: '查询失败', detail: err.message });

@@ -96,13 +96,13 @@ router.post('/init', authMiddleware, async (req, res) => {
 router.post('/sync-salespersons', authMiddleware, async (req, res) => {
   try {
     const users = await db.query(
-      "SELECT UserID, UserName FROM UserInfo WHERE Department = 'A' AND IsDel = 0"
+      "SELECT UserID, UserName, Department FROM UserInfo WHERE Department = 'E' AND IsDel = 0"
     );
 
     for (const u of users) {
       await db.query(
-        "IF NOT EXISTS (SELECT * FROM SalesPerson WHERE id = @p0) INSERT INTO SalesPerson (id, name) VALUES (@p0, @p1)",
-        [u.UserID, u.UserName]
+        "IF NOT EXISTS (SELECT * FROM SalesPerson WHERE id = @p0) INSERT INTO SalesPerson (id, name, department) VALUES (@p0, @p1, @p2) ELSE UPDATE SalesPerson SET name = @p1, department = @p2 WHERE id = @p0",
+        [u.UserID, u.UserName, u.Department]
       );
     }
 

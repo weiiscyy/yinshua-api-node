@@ -261,8 +261,8 @@ router.get('/stats/overview', authMiddleware, async (req, res) => {
     for (const [ptype, table] of Object.entries(TABLE_MAP)) {
       const [total, inProgress, completed] = await Promise.all([
         db.queryOne(`SELECT COUNT(*) as cnt FROM ${table}`),
-        db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} WHERE fahuo IS NULL OR fahuo = 0`),
-        db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} WHERE fahuo = 1`),
+        db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} WHERE BZ < 70 OR BZ IS NULL`),
+        db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} WHERE BZ = 70`),
       ]);
       stats[ptype] = {
         name: PRODUCT_NAMES[ptype],

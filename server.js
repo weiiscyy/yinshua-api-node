@@ -11,7 +11,13 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 // Middleware
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+  maxAge: 0,
+}));
 app.use(express.json());
 
 // Swagger spec JSON 端点（供前端 UI 调用）
@@ -40,6 +46,7 @@ app.use('/api/fahuo', require('./routes/fahuo'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/query', require('./routes/query'));
 app.use('/api/production', require('./routes/production'));
+app.use('/api/process', require('./routes/process_flow'));
 
 // Static files (production build)
 const staticPath = path.join(__dirname, '../yinshua-admin/dist');
