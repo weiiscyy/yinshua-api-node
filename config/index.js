@@ -12,4 +12,8 @@ if (!JWT_SECRET || JWT_SECRET === 'your-secret-jwt-token' || JWT_SECRET === 'yin
   process.exit(1);
 }
 
+if (JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET 长度必须至少32字符，当前长度: ' + JWT_SECRET.length);
+}
+
 module.exports = { JWT_SECRET };

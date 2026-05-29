@@ -12,10 +12,10 @@ const PORT = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin: process.env.CORS_WHITELIST?.split(',').map(s => s.trim()) || [],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false,
   maxAge: 0,
 }));
 app.use(express.json());

@@ -184,7 +184,7 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
     const limit = pt ? 1000 : 300;
 
     for (const [table, type] of tables) {
-      const where = ['ZT=2', '(fahuo=0 OR fahuo IS NULL)'];
+      const where = ['ZT=0', '(fahuo=0 OR fahuo IS NULL)'];
       const p = [];
       let idx = 0;
 
@@ -199,30 +199,33 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
         idx++;
       }
       if (proudnumber) {
-        // YS/YM/ZM 用 proudnumber，DS 用 yjbhao
-        if (table === 'DS') {
-          where.push('yjbhao LIKE @pn' + idx);
-        } else {
+        // 各产品线花号字段不同
+        if (table === 'ZM') {
           where.push('(proudnumber LIKE @pn' + idx + ' OR huahao LIKE @pn' + idx + ')');
+        } else {
+          where.push('yjbhao LIKE @pn' + idx);
         }
         p.push(['pn' + idx, mssql.NVarChar, '%' + proudnumber + '%']);
         idx++;
       }
       if (startDate) {
-        where.push('overdate >= @sd' + idx);
+        where.push('prouddate >= @sd' + idx);
         p.push(['sd' + idx, mssql.DateTime, startDate]);
         idx++;
       }
       if (endDate) {
-        where.push('overdate <= @ed' + idx);
+        where.push('prouddate <= @ed' + idx);
         p.push(['ed' + idx, mssql.DateTime, endDate + ' 23:59:59']);
         idx++;
       }
 
       const whereStr = 'WHERE ' + where.join(' AND ');
-      const pnCol = table === 'DS' ? 'yjbhao' : 'proudnumber';
-      // 按日期从新到旧排序
-      const selSql = 'SELECT TOP ' + limit + ' DD_id, ddbh, company, ' + pnCol + ' AS proudnumber, huahao, shuliang, overdate, zhidan FROM ' + table + ' ' + whereStr + ' ORDER BY overdate DESC';
+      // 各产品线花号字段不同：YS/YM/DS 用 yjbhao，ZM 用 proudnumber
+      const yjbCol = table === 'ZM' ? 'proudnumber' : 'yjbhao';
+      const huahaoCol = table === 'ZM' ? 'huahao' : null;
+      const selCols = 'DD_id, ddbh, company, ' + yjbCol + ' AS proudnumber' + (huahaoCol ? ', ' + huahaoCol + ' AS huahao' : ', NULL AS huahao') + ', shuliang, overdate, prouddate, zhidan';
+      // 按订单建立日期从新到旧排序
+      const selSql = 'SELECT TOP ' + limit + ' ' + selCols + ' FROM ' + table + ' ' + whereStr + ' ORDER BY prouddate DESC';
       const r = await reqT(selSql, p);
 
       for (const row of r.recordset) {
@@ -235,6 +238,7 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
           huahao: row.huahao,
           shuliang: row.shuliang,
           overdate: row.overdate,
+          prouddate: row.prouddate,
           zhidan: row.zhidan,
           total_sent: 0,
         });
@@ -242,10 +246,10 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
     }
 
     // 无查询条件时默认只看近60天（在内存中过滤，SQL 已按日期排序）
-    if (!ddbh && !proudnumber && !startDate && !endDate && !company) {
+    if (!pt && !ddbh && !proudnumber && !startDate && !endDate && !company) {
       const sixtyDaysAgo = new Date();
       sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-      results = results.filter(r => !r.overdate || new Date(r.overdate) >= sixtyDaysAgo);
+      results = results.filter(r => !r.prouddate || new Date(r.prouddate) >= sixtyDaysAgo);
     }
 
     // 参数化 IN 查询，防止 SQL 注入
