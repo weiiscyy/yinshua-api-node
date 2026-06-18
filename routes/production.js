@@ -18,6 +18,26 @@ const STEPS = [
   { field: 'fahuo',    label: '发货',     order: 9, timeField: 'fahuoTime' },
 ];
 
+// 检查指定工序是否可以报工（前序工序必须已完成）
+function canReportStep(order, gongxu_field, product_type) {
+  // 使用产品线对应的工序列表
+  const stepsForType = getStepsForType(product_type);
+  const stepDef = stepsForType.find(s => s.field === gongxu_field);
+  if (!stepDef) return false;
+
+  // 接单工序随时可报
+  if (stepDef.order === 1) return true;
+
+  // 检查所有前序工序是否已完成
+  for (const step of stepsForType) {
+    if (step.order < stepDef.order) {
+      const timeField = step.timeField;
+      if (!order[timeField]) return false;
+    }
+  }
+  return true;
+}
+
 // 按产品线过滤工序
 function getStepsForType(productType) {
   if (productType === 'YS') {
@@ -29,6 +49,35 @@ function getStepsForType(productType) {
 }
 
 // 获取可报工的订单列表
+/**
+ * @swagger
+ * /api/production/orders:
+ *   get:
+ *     summary: 获取可报工的订单列表
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 可报工订单列表
+ */
 router.get('/orders', authMiddleware, async (req, res) => {
   try {
     const { product_type, page = 1, page_size = 20 } = req.query;
@@ -106,6 +155,34 @@ router.get('/orders', authMiddleware, async (req, res) => {
 });
 
 // 获取订单报工状态详情
+/**
+ * @swagger
+ * /api/production/order/{dd_id}:
+ *   get:
+ *     summary: 获取订单报工状态详情
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *     responses:
+ *       200:
+ *         description: 订单报工详情
+ *       400:
+ *         description: 请指定产品类型
+ *       404:
+ *         description: 订单不存在
+ */
 router.get('/order/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { dd_id } = req.params;
@@ -217,6 +294,59 @@ router.get('/order/:dd_id', authMiddleware, async (req, res) => {
 });
 
 // 提交报工
+/**
+ * @swagger
+ * /api/production/report:
+ *   post:
+ *     summary: 提交报工
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [dd_id, product_type, gongxu_field, baochan_num]
+ *             properties:
+ *               dd_id:
+ *                 type: integer
+ *                 description: 订单ID
+ *               product_type:
+ *                 type: string
+ *                 enum: [YS, YM, ZM, DS]
+ *                 description: 产品类型
+ *               gongxu_field:
+ *                 type: string
+ *                 description: 工序字段名
+ *               gongxu_color:
+ *                 type: string
+ *                 nullable: true
+ *                 description: 工序颜色
+ *               baochan_num:
+ *                 type: number
+ *                 description: 报产数量
+ *               buliang_num:
+ *                 type: number
+ *                 description: 不良数量（默认0）
+ *               buliang_reason:
+ *                 type: string
+ *                 nullable: true
+ *                 description: 不良原因
+ *               remark:
+ *                 type: string
+ *                 description: 备注
+ *     responses:
+ *       200:
+ *         description: 报工成功
+ *       400:
+ *         description: 参数错误或不允许报工
+ *       404:
+ *         description: 订单不存在
+ *       500:
+ *         description: 报工失败
+ */
 router.post('/report', authMiddleware, async (req, res) => {
   try {
     const {
@@ -251,7 +381,7 @@ router.post('/report', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: '订单不存在' });
 
     // 检查工序是否可以报工
-    if (!canReportStep(order, gongxu_field)) {
+    if (!canReportStep(order, gongxu_field, product_type)) {
       return res.status(400).json({ error: '前序工序未完成，无法报工' });
     }
 
@@ -290,12 +420,28 @@ router.post('/report', authMiddleware, async (req, res) => {
 
     const newId = insertResult.newId;
 
-    // 注意：报工只记录产量，不自动完工工序
-    // 工序完工需要在订单详情页单独操作
+    // ── P0-1：工序自动完工 ──
+    // 当该工序报产总量达到订单总量时，自动标记工序完成
+    let stepCompleted = false;
+    let nextStep = null;
+    if (afterReport >= orderShuliang) {
+      await db.query(
+        `UPDATE ${TABLE_MAP[product_type]} SET ${gongxu_field}Time = GETDATE() WHERE DD_id = @p0`,
+        [parseInt(dd_id)]
+      );
+      stepCompleted = true;
+
+      // 查找下一工序
+      const stepsForType = getStepsForType(product_type);
+      const currentIdx = stepsForType.findIndex(s => s.field === gongxu_field);
+      if (currentIdx >= 0 && currentIdx < stepsForType.length - 1) {
+        nextStep = stepsForType[currentIdx + 1];
+      }
+    }
 
     res.json({
       success: true,
-      message: '报工成功',
+      message: stepCompleted ? '报工成功，工序已完工 ✓' : '报工成功',
       data: {
         id: newId,
         dd_id: parseInt(dd_id),
@@ -311,6 +457,8 @@ router.post('/report', authMiddleware, async (req, res) => {
         total_reported: afterReport,
         remain: Math.max(0, orderShuliang - afterReport),
         all_reported: afterReport >= orderShuliang,
+        step_completed: stepCompleted,      // P0-1：工序是否刚被标记完成
+        next_step: nextStep ? { field: nextStep.field, label: nextStep.label } : null, // P0-1：下一工序
       },
     });
   } catch (err) {
@@ -320,6 +468,35 @@ router.post('/report', authMiddleware, async (req, res) => {
 });
 
 // 我的报工记录
+/**
+ * @swagger
+ * /api/production/my-reports:
+ *   get:
+ *     summary: 获取我的报工记录
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 筛选日期
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 报工记录列表
+ */
 router.get('/my-reports', authMiddleware, async (req, res) => {
   try {
     const { date, page = 1, page_size = 20 } = req.query;
@@ -372,6 +549,31 @@ router.get('/my-reports', authMiddleware, async (req, res) => {
 });
 
 // 工人产量统计
+/**
+ * @swagger
+ * /api/production/stats/worker:
+ *   get:
+ *     summary: 工人产量统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 开始日期
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 结束日期
+ *     responses:
+ *       200:
+ *         description: 工人产量统计
+ */
 router.get('/stats/worker', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
@@ -402,6 +604,32 @@ router.get('/stats/worker', authMiddleware, async (req, res) => {
 });
 
 // 订单报工明细
+/**
+ * @swagger
+ * /api/production/stats/order/{dd_id}:
+ *   get:
+ *     summary: 订单报工明细
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *     responses:
+ *       200:
+ *         description: 订单报工明细
+ *       400:
+ *         description: 请指定产品类型
+ */
 router.get('/stats/order/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { dd_id } = req.params;
@@ -438,6 +666,37 @@ router.get('/stats/order/:dd_id', authMiddleware, async (req, res) => {
 });
 
 // 不良原因统计
+/**
+ * @swagger
+ * /api/production/stats/defects:
+ *   get:
+ *     summary: 不良原因统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 开始日期
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 结束日期
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品类型
+ *     responses:
+ *       200:
+ *         description: 不良原因统计
+ */
 router.get('/stats/defects', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date, product_type } = req.query;
@@ -466,10 +725,17 @@ router.get('/stats/defects', authMiddleware, async (req, res) => {
 
     // 总计
     let totalSql = `SELECT SUM(BuLiangNum) as total FROM BaoGongLog WHERE BuLiangNum > 0`;
-    if (start_date) { totalSql += ` AND BaoGongTime >= @p0`; }
-    if (end_date) { totalSql += ` AND BaoGongTime <= @p${start_date ? 1 : 0}`; }
+    const totalParams = [];
+    if (start_date) {
+      totalSql += ` AND BaoGongTime >= @p0`;
+      totalParams.push(start_date);
+    }
+    if (end_date) {
+      totalSql += ` AND BaoGongTime <= @p${totalParams.length}`;
+      totalParams.push(end_date);
+    }
 
-    const totalResult = await db.queryOne(totalSql, params);
+    const totalResult = await db.queryOne(totalSql, totalParams);
 
     res.json({
       total_buliang: parseFloat(totalResult?.total) || 0,
@@ -488,6 +754,25 @@ router.get('/stats/defects', authMiddleware, async (req, res) => {
 });
 
 // 日报统计
+/**
+ * @swagger
+ * /api/production/stats/daily:
+ *   get:
+ *     summary: 日报统计
+ *     tags: [生产]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 日期（默认当天）
+ *     responses:
+ *       200:
+ *         description: 日报统计
+ */
 router.get('/stats/daily', authMiddleware, async (req, res) => {
   try {
     const { date } = req.query;

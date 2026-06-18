@@ -11,7 +11,24 @@ async function query(sql, params = []) {
   return req.query(sql);
 }
 
-// 每日订单趋势（近30天）
+/**
+ * @swagger
+ * /api/stats/trend:
+ *   get:
+ *     summary: 每日订单趋势（近30天）
+ *     tags: [统计]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *     responses:
+ *       200:
+ *         description: 各产品线每日订单数趋势
+ */
 router.get('/trend', authMiddleware, async function(req, res) {
   try {
     const days = parseInt(req.query.days) || 30;
@@ -37,6 +54,18 @@ router.get('/trend', authMiddleware, async function(req, res) {
 });
 
 // 各产品线统计（数量 + 完成率）
+/**
+ * @swagger
+ * /api/stats/overview:
+ *   get:
+ *     summary: 各产品线统计概览（首页看板）
+ *     tags: [统计]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 各产品线总数/进行中/已完成/已发货数量
+ */
 router.get('/overview', authMiddleware, async function(req, res) {
   try {
     const tables = ['YS', 'YM', 'ZM', 'DS'];
@@ -67,6 +96,18 @@ router.get('/overview', authMiddleware, async function(req, res) {
 });
 
 // 在制订单状态分布（按ZT值分布）
+/**
+ * @swagger
+ * /api/stats/status_dist:
+ *   get:
+ *     summary: 在制订单状态分布
+ *     tags: [统计]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 各产品线按 ZT/fahuo 组合的订单分布
+ */
 router.get('/status_dist', authMiddleware, async function(req, res) {
   try {
     const tables = ['YS', 'YM', 'ZM', 'DS'];
@@ -91,6 +132,18 @@ router.get('/status_dist', authMiddleware, async function(req, res) {
 });
 
 // 业务员业绩统计
+/**
+ * @swagger
+ * /api/stats/ywy_stats:
+ *   get:
+ *     summary: 业务员业绩统计
+ *     tags: [统计]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 各业务员接单数量和完成数量统计
+ */
 router.get('/ywy_stats', authMiddleware, async function(req, res) {
   try {
     const tables = ['YS', 'YM', 'ZM', 'DS'];

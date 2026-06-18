@@ -49,7 +49,68 @@ const TABLE_MAP = {
   DS: { table: 'DS',  gx: 'DSGX' },
 };
 
-// 搜索订单
+/**
+ * @swagger
+ * /api/orders/search:
+ *   get:
+ *     summary: 搜索订单列表
+ *     tags: [订单]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         schema:
+ *           type: string
+ *         description: 搜索关键词（订单号/客户/料号）
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [0, 1]
+ *         description: 发货状态（0=未发货，1=已发货）
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 订单列表
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 page_size: { type: integer }
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       DD_id: { type: integer }
+ *                       ddbh: { type: string }
+ *                       company: { type: string }
+ *                       product_type: { type: string }
+ *                       ZT: { type: integer }
+ *                       fahuo: { type: boolean }
+ *                       prouddate: { type: string, format: date-time }
+ *                       overdate: { type: string, format: date-time }
+ *                       steps: { type: array }
+ */
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { keyword, product_type, status, page = 1, page_size = 20 } = req.query;
@@ -57,17 +118,19 @@ router.get('/search', authMiddleware, async (req, res) => {
     const results = [];
 
     const types = product_type && TABLE_MAP[product_type] ? [product_type] : Object.keys(TABLE_MAP);
+    const pageOffset = (parseInt(page) - 1) * parseInt(page_size);
 
+    // 构建各表的查询条件和参数
     for (const ptype of types) {
       const { table } = TABLE_MAP[ptype];
-      let sql = `SELECT TOP ${parseInt(page_size) * 3} * FROM ${table} WHERE 1=1`;
-      let countSql = `SELECT COUNT(*) as cnt FROM ${table} WHERE 1=1`;
       const params = [];
+      let sql = `SELECT * FROM ${table} WHERE 1=1`;
+      let countSql = `SELECT COUNT(*) as cnt FROM ${table} WHERE 1=1`;
 
       if (keyword) {
         const k = `%${keyword}%`;
-        sql += ` AND (ddbh LIKE @p${params.length} OR company LIKE @p${params.length} OR yjbhao LIKE @p${params.length})`;
-        countSql += ` AND (ddbh LIKE @p${params.length} OR company LIKE @p${params.length} OR yjbhao LIKE @p${params.length})`;
+        sql += ` AND (ddbh LIKE @p0 OR company LIKE @p0 OR yjbhao LIKE @p0)`;
+        countSql += ` AND (ddbh LIKE @p0 OR company LIKE @p0 OR yjbhao LIKE @p0)`;
         params.push(k);
       }
 
@@ -79,22 +142,45 @@ router.get('/search', authMiddleware, async (req, res) => {
         countSql += ' AND fahuo = 1';
       }
 
-      sql += ' ORDER BY DD_id DESC';
+      // 原生 SQL Server 分页
+      sql += ` ORDER BY DD_id DESC OFFSET @p${params.length} ROWS FETCH NEXT @p${params.length + 1} ROWS ONLY`;
+      params.push(pageOffset, parseInt(page_size));
 
+      // count 查询不带分页参数
       const [rows, countResult] = await Promise.all([
         db.query(sql, params),
-        db.queryOne(countSql, params),
+        db.queryOne(countSql, keyword ? [k] : []),
       ]);
 
       for (const order of rows) {
-        results.push(buildProgress(order, ptype));
+        results.push(buildProgressOrders(order, ptype));
       }
     }
 
-    // 全局排序并分页
+    // 各表已分别分页，全局排序只对当前页有效
     results.sort((a, b) => b.DD_id - a.DD_id);
-    const total = results.length;
-    const items = results.slice(offset, offset + parseInt(page_size));
+
+    // 总数：各表分别查再求和（避免 UNION 复杂参数化问题）
+    let total = 0;
+    for (const ptype of types) {
+      const { table } = TABLE_MAP[ptype];
+      const countParams = [];
+      let countSql = `SELECT COUNT(*) as cnt FROM ${table} WHERE 1=1`;
+      if (keyword) {
+        const k = `%${keyword}%`;
+        countSql += ` AND (ddbh LIKE @p0 OR company LIKE @p0 OR yjbhao LIKE @p0)`;
+        countParams.push(k);
+      }
+      if (status === '0') {
+        countSql += ' AND (fahuo IS NULL OR fahuo = 0)';
+      } else if (status === '1') {
+        countSql += ' AND fahuo = 1';
+      }
+      const c = await db.queryOne(countSql, countParams);
+      total += c?.cnt || 0;
+    }
+
+    const items = results;
 
     res.json({ total, page: parseInt(page), page_size: parseInt(page_size), items });
   } catch (err) {
@@ -103,7 +189,33 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
-// 订单进度详情
+/**
+ * @swagger
+ * /api/orders/progress/{product_type}/{dd_id}:
+ *   get:
+ *     summary: 获取订单进度详情
+ *     tags: [订单]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: product_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *       - in: path
+ *         name: dd_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 订单ID
+ *     responses:
+ *       200:
+ *         description: 订单进度详情
+ *       404:
+ *         description: 订单不存在
+ */
 router.get('/progress/:product_type/:dd_id', authMiddleware, async (req, res) => {
   try {
     const { product_type, dd_id } = req.params;
@@ -116,16 +228,39 @@ router.get('/progress/:product_type/:dd_id', authMiddleware, async (req, res) =>
 
     if (!order) return res.status(404).json({ error: '订单不存在' });
 
-    res.json(buildProgress(order, product_type));
+    res.json(buildProgressOrders(order, product_type));
   } catch (err) {
     res.status(500).json({ error: '查询失败', detail: err.message });
   }
 });
 
-// 订单统计
+/**
+ * @swagger
+ * /api/orders/stats:
+ *   get:
+ *     summary: 获取各产品线订单统计
+ *     tags: [订单]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 各产品线统计
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: object
+ *                 properties:
+ *                   name: { type: string }
+ *                   total: { type: integer }
+ *                   in_progress: { type: integer }
+ *                   completed: { type: integer }
+ */
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const stats = {};
+    const PRODUCT_NAMES = { YS: '印刷', YM: '印刷面', ZM: '纸盒', DS: '模切' };
     for (const [ptype, { table }] of Object.entries(TABLE_MAP)) {
       const [total, inProgress, completed] = await Promise.all([
         db.queryOne(`SELECT COUNT(*) as cnt FROM ${table}`),

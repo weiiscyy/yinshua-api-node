@@ -47,6 +47,48 @@ function buildRow(r, ptype) {
 }
 
 // 综合查询
+/**
+ * @swagger
+ * /api/query/query:
+ *   get:
+ *     summary: 综合查询订单
+ *     tags: [查询]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 接单日期起
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 接单日期止
+ *       - in: query
+ *         name: company
+ *         schema:
+ *           type: string
+ *         description: 客户名称（模糊搜索）
+ *       - in: query
+ *         name: huahao
+ *         schema:
+ *           type: string
+ *         description: 花号/料号
+ *       - in: query
+ *         name: product_types
+ *         schema:
+ *           type: string
+ *         description: 产品线，多个用逗号分隔（如 YS,YM）
+ *     responses:
+ *       200:
+ *         description: 查询结果
+ *       400:
+ *         description: 缺少查询条件
+ */
 router.get('/query', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date, company, huahao, product_types, page = 1, page_size = 50 } = req.query;
@@ -106,6 +148,29 @@ router.get('/query', authMiddleware, async (req, res) => {
 });
 
 // 导出查询（限制最多10000条，防止内存溢出）
+/**
+ * @swagger
+ * /api/query/export:
+ *   get:
+ *     summary: 导出综合查询结果（JSON 格式）
+ *     tags: [查询]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start_date
+ *       - in: query
+ *         name: end_date
+ *       - in: query
+ *         name: company
+ *       - in: query
+ *         name: huahao
+ *       - in: query
+ *         name: product_types
+ *     responses:
+ *       200:
+ *         description: 导出 JSON 数据（最多 10000 条）
+ */
 router.get('/export', authMiddleware, async (req, res) => {
   try {
     const { start_date, end_date, company, huahao, product_types } = req.query;

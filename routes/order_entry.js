@@ -45,6 +45,18 @@ async function generateDdbh(product_type) {
   }
 }
 
+/**
+ * @swagger
+ * /api/order_entry/process-classes:
+ *   get:
+ *     summary: 获取工序流程分类
+ *     tags: [订单录入]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 工序流程分类
+ */
 router.get('/process-classes', authMiddleware, async (req, res) => {
   const result = {};
   for (const [pt, classes] of Object.entries(PROCESS_CLASSES)) {
@@ -57,6 +69,147 @@ router.get('/process-classes', authMiddleware, async (req, res) => {
   res.json(result);
 });
 
+/**
+ * @swagger
+ * /api/order_entry:
+ *   post:
+ *     summary: 创建新订单
+ *     tags: [订单录入]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [product_type, company]
+ *             properties:
+ *               product_type:
+ *                 type: string
+ *                 enum: [YS, YM, ZM, DS]
+ *                 description: 产品类型
+ *               company:
+ *                 type: string
+ *                 description: 客户公司
+ *               ddbh:
+ *                 type: string
+ *                 description: 订单编号（可选，自动生成）
+ *               prouddate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 制单日期
+ *               overdate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 交货日期
+ *               yjbhao:
+ *                 type: string
+ *                 description: 样板号
+ *               cpgg:
+ *                 type: string
+ *                 description: 产品规格
+ *               pingshu:
+ *                 type: string
+ *                 description: 品名/品书
+ *               shuliang:
+ *                 type: string
+ *                 description: 数量
+ *               ywy:
+ *                 type: integer
+ *                 description: 业务员ID
+ *               zhidan:
+ *                 type: string
+ *                 description: 制单人
+ *               fahuodanwei:
+ *                 type: string
+ *                 description: 发货单位
+ *               kuanhao:
+ *                 type: string
+ *                 description: 款号
+ *               jiagongfei:
+ *                 type: string
+ *                 description: 加工费
+ *               waifa:
+ *                 type: boolean
+ *                 description: 是否外发
+ *               danjia:
+ *                 type: number
+ *                 description: 单价
+ *               sydazhang:
+ *                 type: integer
+ *                 description: 是否有大账
+ *               syMoney:
+ *                 type: number
+ *                 description: 大账金额
+ *               beizhu:
+ *                 type: string
+ *                 description: 备注
+ *               sclcSteps:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 工序步骤列表
+ *               proudnumber:
+ *                 type: string
+ *                 description: 产品编号（YS/YM）
+ *               lldate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 领料日期（YS/YM）
+ *               cidiehao:
+ *                 type: string
+ *                 description: 刺青号（ZM）
+ *               allcount:
+ *                 type: string
+ *                 description: 总数（ZM）
+ *               weidu:
+ *                 type: string
+ *                 description: 维度（ZM）
+ *               kuandu:
+ *                 type: string
+ *                 description: 宽度（ZM）
+ *               changdu:
+ *                 type: string
+ *                 description: 长度（ZM）
+ *               huachang:
+ *                 type: string
+ *                 description: 花厂（ZM）
+ *               huahao:
+ *                 type: string
+ *                 description: 花号（ZM）
+ *               jiage:
+ *                 type: string
+ *                 description: 价格（DS）
+ *               zhengli:
+ *                 type: string
+ *                 description: 整理（DS）
+ *               fhdw:
+ *                 type: string
+ *                 description: 发货单位（DS）
+ *               fhdate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 发货日期（DS）
+ *               fhr:
+ *                 type: string
+ *                 description: 发货人（DS）
+ *     responses:
+ *       200:
+ *         description: 创建成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 ddbh: { type: string }
+ *                 DD_id: { type: integer }
+ *       400:
+ *         description: 参数错误
+ *       500:
+ *         description: 创建失败
+ */
 router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   try {
     const body = req.body;
@@ -72,7 +225,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
       // ZM 专用
       cidiehao, allcount, weidu, kuandu, changdu, huachang, huahao,
       chenpingcc, dhdw, sxdate, soujianjl, proudbanbie,
-      zm_zhijian, gyyq,
+      zm_zhijian, gyyq, kts, jijia,
+      // YM 专用
+      beizhu8, upfile,
       // DS 专用
       jiage, zhengli, fhdw, fhdate, fhr,
     } = body;
@@ -140,23 +295,35 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           kuanhao: ['kuanhao', db.mssql.NVarChar, kuanhao || ''],
           jiagongfei: ['jiagongfei', db.mssql.NVarChar, jiagongfei || ''],
           danjia: ['danjia', db.mssql.Money, danjia || null],
+          sydazhang: ['sydazhang', db.mssql.Numeric(18,4), sydazhang || null],
+          syMoney: ['syMoney', db.mssql.Money, syMoney || null],
+          yszj: ['yszj', db.mssql.Money, body.yszj || null],
           proudnumber: ['proudnumber', db.mssql.NVarChar, proudnumber || ''],
           lldate: ['lldate', db.mssql.DateTime, lldate || null],
           zhengli: ['zhengli', db.mssql.NVarChar, zhengli || ''],
+          yss20: ['yss20', db.mssql.NVarChar, body.yss20 || ''],
           gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
-          yssj: ['yssj', db.mssql.NVarChar, yssj || ''],
+          yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
+          ylzd: ['ylzd', db.mssql.NVarChar, ylzd || ''],
+          jyyaoqiu: ['jyyaoqiu', db.mssql.NVarChar, jyyaoqiu || ''],
+          beizhuYM: ['beizhuYM', db.mssql.NVarChar, body.beizhu || body.beizhuYM || ''],
+          beizhu8: ['beizhu8', db.mssql.NVarChar, beizhu8 || ''],
+          UpFile: ['UpFile', db.mssql.NVarChar, upfile || ''],
         },
         ZM: {
           ...commonFields,
           overdate: ['overdate', db.mssql.DateTime, overdate || null],
-          cpgg: ['cpgg', db.mssql.NVarChar, cpgg || ''],
-          pingshu: ['pingshu', db.mssql.NVarChar, pingshu || ''],
           fahuodanwei: ['fahuodanwei', db.mssql.NVarChar, fahuodanwei || ''],
-          kuanhao: ['kuanhao', db.mssql.NVarChar, kuanhao || ''],
-          jiagongfei: ['jiagongfei', db.mssql.NVarChar, jiagongfei || ''],
-          danjia: ['danjia', db.mssql.Money, danjia || null],
-          yjbhao: ['yjbhao', db.mssql.NVarChar, yjbhao || ''],
           cidiehao: ['cidiehao', db.mssql.NVarChar, cidiehao || ''],
+          jiagongfei: ['jiagongfei', db.mssql.NVarChar, String(jiagongfei || '')],
+          kuanhao: ['kuanhao', db.mssql.NVarChar, kuanhao || ''],
+          soujianjl: ['soujianjl', db.mssql.NVarChar, soujianjl || ''],
+          waifa: ['waifa', db.mssql.Int, waifa ? 1 : 0],
+          kts: ['kts', db.mssql.NVarChar, kts || ''],
+          jijia: ['jijia', db.mssql.NVarChar, jijia || ''],
+          zm_zhijian: ['zm_zhijian', db.mssql.NVarChar, zm_zhijian || ''],
+          gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
+          huahao: ['huahao', db.mssql.NVarChar, huahao || ''],
           allcount: ['allcount', db.mssql.NVarChar, allcount || ''],
           weidu: ['weidu', db.mssql.NVarChar, weidu || ''],
           kuandu: ['kuandu', db.mssql.NVarChar, kuandu || ''],
@@ -165,11 +332,9 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
           chenpingcc: ['chenpingcc', db.mssql.NVarChar, chenpingcc || ''],
           dhdw: ['dhdw', db.mssql.NVarChar, dhdw || ''],
           sxdate: ['sxdate', db.mssql.NVarChar, sxdate || ''],
-          soujianjl: ['soujianjl', db.mssql.NVarChar, soujianjl || ''],
           proudbanbie: ['proudbanbie', db.mssql.NVarChar, proudbanbie || ''],
-          zm_zhijian: ['zm_zhijian', db.mssql.NVarChar, zm_zhijian || ''],
-          gyyq: ['gyyq', db.mssql.NVarChar, gyyq || ''],
-          huahao: ['huahao', db.mssql.NVarChar, huahao || ''],
+          proudnumber: ['proudnumber', db.mssql.NVarChar, proudnumber || ''],
+          // bz/bz1-bz12/qw1-qw12/ss1-ss12/cmh1-cmh10/hzl1-hzl15 由 commonFields 提供
         },
         DS: {
           ...commonFields,
@@ -234,6 +399,30 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         const gxParams = gxCols.map((k, i) => [gxPnames[i], db.mssql.Int, gxFields[k]]);
         const gxInsert = `INSERT INTO ${gxTable} (${gxCols.join(',')}) VALUES (${gxPnames.map(p => '@' + p).join(',')})`;
         await reqT(gxInsert, gxParams);
+
+        // YS 整理环节 zhengli：根据勾选的 hzlA/hzlB/hzlC 字段，拼接中文汇总字符串写回 YS 主表
+        if (product_type === 'YS' && sclcSteps.length > 0) {
+          const zhengliLabels = {
+            hzlA1: '单面光膜', hzlA2: '单面亚膜', hzlA3: '双面光膜', hzlA4: '双面亚膜',
+            hzlA5: '单面专用膜', hzlA6: '双面专用膜',
+            hzlC3: '外加工压光',
+            hzlB3: '烫金', hzlB4: '压钢刀', hzlB5: '穿线', hzlB6: '糊纸粘合',
+            hzlB7: '打汽眼', hzlB8: '凹凸', hzlB11: '激光切割', hzlB12: '穿别针',
+            hzlB13: '路线', hzlB14: '敲柳钉', hzlB15: '包边',
+            hzlC1: '局部丝网印', hzlC4: '绣花', hzlC5: '烫钻', hzlC6: '胶印上光',
+            hzlC7: '粘备用袋', hzlC8: '揉皱', hzlC9: '敲毛边', hzlC10: '其它',
+          };
+          const zhengli = sclcSteps
+            .map(f => zhengliLabels[f])
+            .filter(Boolean)
+            .join('');
+          if (zhengli) {
+            await reqT(`UPDATE YS SET zhengli=@p0 WHERE DD_id=@p1`, [
+              ['p0', db.mssql.NVarChar, zhengli],
+              ['p1', db.mssql.Int, newId],
+            ]);
+          }
+        }
       }
 
       // YS 印刷色数明细（yssl1-9, jine1-9, yss20, jine10, yszj）
@@ -265,16 +454,106 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
         }
       }
 
-      // ZM 色卡明细 qw/ss/bz, 尺码 sl/lieshu
+      // YM 印刷色数明细（yssl1-9, jine1-9, yszj）
+      if (product_type === 'YM') {
+        const updateParts = [];
+        const updateParams = [];
+        let pi = 0;
+        for (let i = 1; i <= 9; i++) {
+          if (body[`yssl${i}`] !== undefined || body[`jine${i}`] !== undefined) {
+            updateParts.push(`yssl${i}=@p${pi}`, `jine${i}=@p${pi+1}`);
+            updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body[`yssl${i}`] || '')], [`p${pi+1}`, db.mssql.NVarChar, String(body[`jine${i}`] || '')]);
+            pi += 2;
+          }
+        }
+        if (body.yszj !== undefined) {
+          updateParts.push(`yszj=@p${pi}`);
+          updateParams.push([`p${pi}`, db.mssql.NVarChar, String(body.yszj || '')]);
+          pi += 1;
+        }
+        if (updateParts.length > 0) {
+          updateParams.push([`p${pi}`, db.mssql.Int, newId]);
+          const updateSql = `UPDATE ${product_type} SET ${updateParts.join(',')} WHERE DD_id=@p${pi}`;
+          await reqT(updateSql, updateParams);
+        }
+      }
+
+      // YM 录入后：同步 zhengli 字符串到 YM 主表
+      // 标签来自旧系统 YMinput_Add.asp L313-347：烘色牢度/切割/超声波切割/手工切折/手工对折/其它/三角折
+      // 前端传 sclcSteps 格式为 hzl1-晒版/hzl2-显影...，hzl1/hzl2/hzl3/hzl4/hzl5/hzl6/hzl7
+      if (product_type === 'YM' && sclcSteps.length > 0) {
+        const ymLabels = {
+          hzl1: '烘色牢度', hzl2: '切割', hzl3: '超声波切割',
+          hzl4: '手工切折', hzl5: '手工对折', hzl6: '其它', hzl7: '三角折'
+        };
+        const zhengli = sclcSteps.map(s => {
+          const num = s.split('-')[0].replace(/[^0-9]/g, '');
+          return ymLabels[`hzl${num}`] || s;
+        }).join(',');
+        if (zhengli) {
+          await reqT(`UPDATE YM SET zhengli=@p0 WHERE DD_id=@p1`, [['p0', db.mssql.NVarChar, zhengli], ['p1', db.mssql.Int, newId]]);
+        }
+      }
+
+      // ZM 录入后：同步 zhengli 字符串到 ZM 主表
+      // 标签来自 ZMinput_Add.asp L308-387：切折/三角折/对折/切割/超声波/热切粘衬/包边/卷装/留样/热切/划口/充棉/打汽眼/踩线/烫钻/盒装
+      if (product_type === 'ZM' && sclcSteps.length > 0) {
+        const zmLabels = {
+          hzl1:'切折', hzl2:'三角折', hzl3:'对折', hzl4:'切割', hzl5:'超声波',
+          hzl6:'热切粘衬', hzl7:'包边', hzl8:'卷装', hzl9:'留样', hzl10:'热切',
+          hzl11:'划口', hzl12:'充棉', hzl13:'打汽眼', hzl14:'踩线', hzl15:'烫钻', hzl16:'盒装'
+        };
+        const zhengli = sclcSteps.map(s => {
+          const num = s.split('-')[0].replace(/[^0-9]/g, '');
+          return zmLabels[`hzl${num}`] || s;
+        }).join(',');
+        if (zhengli) {
+          await reqT(`UPDATE ZM SET zhengli=@p0 WHERE DD_id=@p1`, [['p0', db.mssql.NVarChar, zhengli], ['p1', db.mssql.Int, newId]]);
+        }
+      }
+
+      // ZM 色卡明细 qw1-qw12(千纬)/ss1-ss12(色纱)/bz1-bz12(备注)
+      // ZM 尺码号 cmh1-cmh10
+      // ZM 数量 sl1-sl10 / 列数 lieshu1-lieshu10
       if (product_type === 'ZM') {
         const zmParts = [];
         const zmParams = [];
         let pi = 0;
+        // 色卡：千纬/色纱/备注，每组 i=1~12
         for (let i = 1; i <= 12; i++) {
-          if (body[`qw${i}`]) { zmParts.push(`qw${i}=@p${pi}`, `ss${i}=@p${pi+1}`, `bz${i}=@p${pi+2}`); zmParams.push(...[[`p${pi}`,db.mssql.NVarChar,body[`qw${i}`]],[`p${pi+1}`,db.mssql.NVarChar,body[`ss${i}`]],[`p${pi+2}`,db.mssql.NVarChar,body[`bz${i}`]]]); pi += 3; }
+          if (body[`qw${i}`]) {
+            zmParts.push(`qw${i}=@p${pi}`, `ss${i}=@p${pi+1}`, `bz${i}=@p${pi+2}`);
+            zmParams.push(
+              [`p${pi}`, db.mssql.NVarChar, body[`qw${i}`] || ''],
+              [`p${pi+1}`, db.mssql.NVarChar, body[`ss${i}`] || ''],
+              [`p${pi+2}`, db.mssql.NVarChar, body[`bz${i}`] || '']
+            );
+            pi += 3;
+          }
         }
+        // 尺码号 cmh1~cmh10（独立UPDATE，不与其他字段同行）
         for (let i = 1; i <= 10; i++) {
-          if (body[`sl${i}`]) { zmParts.push(`sl${i}=@p${pi}`, `lieshu${i}=@p${pi+1}`); zmParams.push(...[[`p${pi}`,db.mssql.NVarChar,body[`sl${i}`]],[`p${pi+1}`,db.mssql.NVarChar,body[`lieshu${i}`]]]); pi += 2; }
+          if (body[`cmh${i}`] !== undefined && body[`cmh${i}`] !== null && body[`cmh${i}`] !== '') {
+            zmParts.push(`cmh${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`cmh${i}`] || '']);
+            pi += 1;
+          }
+        }
+        // 数量 sl1~sl10（独立UPDATE）
+        for (let i = 1; i <= 10; i++) {
+          if (body[`sl${i}`] !== undefined && body[`sl${i}`] !== null && body[`sl${i}`] !== '') {
+            zmParts.push(`sl${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`sl${i}`] || '']);
+            pi += 1;
+          }
+        }
+        // 列数 lieshu1~lieshu10（独立UPDATE）
+        for (let i = 1; i <= 10; i++) {
+          if (body[`lieshu${i}`] !== undefined && body[`lieshu${i}`] !== null && body[`lieshu${i}`] !== '') {
+            zmParts.push(`lieshu${i}=@p${pi}`);
+            zmParams.push([`p${pi}`, db.mssql.NVarChar, body[`lieshu${i}`] || '']);
+            pi += 1;
+          }
         }
         if (zmParts.length > 0) {
           zmParams.push([`p${pi}`, db.mssql.Int, newId]);
@@ -287,6 +566,98 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async (req, res) => {
   } catch (err) {
     console.error('ORDER ENTRY ERROR:', err.message);
     res.status(500).json({ error: '创建订单失败', detail: err.message });
+  }
+});
+
+// 各产品线查询字段映射
+const COPY_LIST_FIELDS = {
+  YS:  ['DD_id','ddbh','company','prouddate','yjbhao','kuanhao','yszj','shuliang'],
+  YM:  ['DD_id','ddbh','company','prouddate','yjbhao','kuanhao','yszj','shuliang'],
+  ZM:  ['DD_id','ddbh','company','prouddate','huahao','proudnumber','jijia','shuliang'],
+  DS:  ['DD_id','ddbh','company','prouddate','yjbhao','yszj','shuliang'],
+};
+
+// router 已在文件顶部定义，无需重新 const router = express.Router();
+// 此处直接使用文件中已有的 router 实例
+
+router.get('/copy-list', authMiddleware, async (req, res) => {
+  try {
+    const {
+      product_type,
+      company,
+      start_date,
+      end_date,
+      yjbhao,
+      kuanhao,
+      huahao,
+      proudnumber,
+      page = 1,
+      page_size = 20,
+    } = req.query;
+
+    if (!product_type) {
+      return res.status(400).json({ error: '请选择订单类型' });
+    }
+
+    const table = product_type.toUpperCase();
+    if (!COPY_LIST_FIELDS[table]) {
+      return res.status(400).json({ error: '无效的订单类型' });
+    }
+
+    // 构建 WHERE 条件和参数
+    const conditions = [];
+    const params = [];
+
+    if (company) {
+      conditions.push(`company LIKE @p${params.length}`);
+      params.push(`%${company.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
+    }
+    if (start_date) {
+      conditions.push(`prouddate >= @p${params.length}`);
+      params.push(start_date);
+    }
+    if (end_date) {
+      conditions.push(`prouddate <= @p${params.length}`);
+      params.push(end_date);
+    }
+    if (yjbhao) {
+      conditions.push(`yjbhao LIKE @p${params.length}`);
+      params.push(`%${yjbhao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
+    }
+    if (kuanhao) {
+      conditions.push(`kuanhao LIKE @p${params.length}`);
+      params.push(`%${kuanhao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
+    }
+    if (huahao) {
+      conditions.push(`huahao LIKE @p${params.length}`);
+      params.push(`%${huahao.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
+    }
+    if (proudnumber) {
+      conditions.push(`proudnumber LIKE @p${params.length}`);
+      params.push(`%${proudnumber.replace(/%/g, '\%').replace(/_/g, '\_')}%`);
+    }
+
+    const whereStr = conditions.length ? 'WHERE ' + conditions.join(' AND ') : 'WHERE 1=1';
+
+    // 分页
+    const pageNum = parseInt(page) || 1;
+    const pageSizeNum = Math.min(200, Math.max(1, parseInt(page_size) || 20));
+    const offset = (pageNum - 1) * pageSizeNum;
+
+    // 查总数
+    const countR = await db.queryOne(`SELECT COUNT(*) as cnt FROM ${table} ${whereStr}`, params);
+    const total = countR.cnt;
+
+    // 数据（OFFSET FETCH 分页）
+    const fields = COPY_LIST_FIELDS[table].join(', ');
+    const sql = `SELECT ${fields} FROM ${table} ${whereStr} ORDER BY DD_id DESC OFFSET @p${params.length} ROWS FETCH NEXT @p${params.length + 1} ROWS ONLY`;
+    params.push(offset, pageSizeNum);
+
+    const rows = await db.query(sql, params);
+    res.json({ total, page: pageNum, page_size: pageSizeNum, items: rows, product_type: table });
+  } catch (err) {
+    console.error('[copy-list] error:', err.message);
+    res.status(500).json({ error: '查询失败', detail: err.message });
   }
 });
 

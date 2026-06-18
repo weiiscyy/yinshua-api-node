@@ -13,6 +13,32 @@ async function reqT(sqlStr, params) {
 }
 
 // ── 发货单列表 ───────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/list:
+ *   get:
+ *     summary: 发货单列表
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         description: 搜索关键词（公司/快递公司/快递号）
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: page_size
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: 发货单分页列表
+ */
 router.get('/list', authMiddleware, async function(req, res) {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -69,6 +95,27 @@ router.get('/list', authMiddleware, async function(req, res) {
 });
 
 // ── 获取单个发货单（含关联订单） ───────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   get:
+ *     summary: 获取发货单详情
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 发货单ID
+ *     responses:
+ *       200:
+ *         description: 发货单详情（含关联订单）
+ *       404:
+ *         description: 未找到该发货单
+ */
 router.get('/:id', authMiddleware, async function(req, res) {
   try {
     const fCols = 'f.ID AS id, f.company, f.RegTime AS regtime, f.kdgs, f.kdhao, f.fhr, f.ywy, u.UserName AS ywy_name';
@@ -97,10 +144,38 @@ router.get('/:id', authMiddleware, async function(req, res) {
 });
 
 // ── 待发货订单列表 ───────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/orders/pending:
+ *   get:
+ *     summary: 待发货订单列表
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: product_type
+ *         schema:
+ *           type: string
+ *           enum: [YS, YM, ZM, DS]
+ *         description: 产品线筛选
+ *       - in: query
+ *         name: company
+ *         schema:
+ *           type: string
+ *         description: 客户名称
+ *     responses:
+ *       200:
+ *         description: 未完成发货的订单列表
+ */
 router.get('/orders/pending', authMiddleware, async function(req, res) {
   try {
     const pt = req.query.product_type;
     const company = req.query.company;
+    const ddbh = req.query.ddbh;
+    const proudnumber = req.query.proudnumber; // 花号/印件编号
+    const startDate = req.query.start_date;
+    const endDate = req.query.end_date;
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.page_size) || 50;
 
@@ -109,7 +184,7 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
     const limit = pt ? 1000 : 300;
 
     for (const [table, type] of tables) {
-      const where = ['ZT=2', '(fahuo=0 OR fahuo IS NULL)'];
+      const where = ['ZT=0', '(fahuo=0 OR fahuo IS NULL)'];
       const p = [];
       let idx = 0;
 
@@ -118,10 +193,39 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
         p.push(['c' + idx, mssql.NVarChar, '%' + company + '%']);
         idx++;
       }
+      if (ddbh) {
+        where.push('ddbh LIKE @ddbh' + idx);
+        p.push(['ddbh' + idx, mssql.NVarChar, '%' + ddbh + '%']);
+        idx++;
+      }
+      if (proudnumber) {
+        // 各产品线花号字段不同
+        if (table === 'ZM') {
+          where.push('(proudnumber LIKE @pn' + idx + ' OR huahao LIKE @pn' + idx + ')');
+        } else {
+          where.push('yjbhao LIKE @pn' + idx);
+        }
+        p.push(['pn' + idx, mssql.NVarChar, '%' + proudnumber + '%']);
+        idx++;
+      }
+      if (startDate) {
+        where.push('prouddate >= @sd' + idx);
+        p.push(['sd' + idx, mssql.DateTime, startDate]);
+        idx++;
+      }
+      if (endDate) {
+        where.push('prouddate <= @ed' + idx);
+        p.push(['ed' + idx, mssql.DateTime, endDate + ' 23:59:59']);
+        idx++;
+      }
 
       const whereStr = 'WHERE ' + where.join(' AND ');
-      const pnCol = table === 'DS' ? 'yjbhao' : 'proudnumber';
-      const selSql = 'SELECT TOP ' + limit + ' DD_id, ddbh, company, ' + pnCol + ' AS proudnumber, shuliang, overdate, zhidan FROM ' + table + ' ' + whereStr + ' ORDER BY DD_id DESC';
+      // 各产品线花号字段不同：YS/YM/DS 用 yjbhao，ZM 用 proudnumber
+      const yjbCol = table === 'ZM' ? 'proudnumber' : 'yjbhao';
+      const huahaoCol = table === 'ZM' ? 'huahao' : null;
+      const selCols = 'DD_id, ddbh, company, ' + yjbCol + ' AS proudnumber' + (huahaoCol ? ', ' + huahaoCol + ' AS huahao' : ', NULL AS huahao') + ', shuliang, overdate, prouddate, zhidan';
+      // 按订单建立日期从新到旧排序
+      const selSql = 'SELECT TOP ' + limit + ' ' + selCols + ' FROM ' + table + ' ' + whereStr + ' ORDER BY prouddate DESC';
       const r = await reqT(selSql, p);
 
       for (const row of r.recordset) {
@@ -131,19 +235,22 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
           product_type: type,
           company: row.company,
           proudnumber: row.proudnumber,
+          huahao: row.huahao,
           shuliang: row.shuliang,
           overdate: row.overdate,
+          prouddate: row.prouddate,
           zhidan: row.zhidan,
           total_sent: 0,
         });
       }
     }
 
-    results.sort((a, b) => {
-      if (!a.overdate) return 1;
-      if (!b.overdate) return -1;
-      return new Date(a.overdate) - new Date(b.overdate);
-    });
+    // 无查询条件时默认只看近60天（在内存中过滤，SQL 已按日期排序）
+    if (!pt && !ddbh && !proudnumber && !startDate && !endDate && !company) {
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+      results = results.filter(r => !r.prouddate || new Date(r.prouddate) >= sixtyDaysAgo);
+    }
 
     // 参数化 IN 查询，防止 SQL 注入
     const ddIds = results.map(r => r.dd_id);
@@ -173,6 +280,32 @@ router.get('/orders/pending', authMiddleware, async function(req, res) {
 });
 
 // ── 新建发货单 ──────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo:
+ *   post:
+ *     summary: 新建发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               company: { type: string, description: 收货单位 }
+ *               kdgs: { type: string, description: 快递公司 }
+ *               kdhao: { type: string, description: 快递号 }
+ *               ywy: { type: integer, description: 业务员ID }
+ *               orders: { type: array, description: 关联订单列表', items: { type: object } }
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ *       400:
+ *         description: 参数缺失
+ */
 router.post('/', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   const pool = await db.getPool();
   const transaction = new mssql.Transaction(pool);
@@ -240,10 +373,33 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async function(req, res)
       const tblMap = { 'YS': 'YS', 'YM': 'YM', 'ZM': 'ZM', 'DS': 'DS' };
       const tbl = tblMap[item.product_type];
       if (tbl) {
+        // 写入 fahuo_id
         const reqU = new mssql.Request(transaction);
         reqU.input('fid', mssql.Int, newFhId);
         reqU.input('did', mssql.Int, parseInt(item.dd_id));
         await reqU.query('UPDATE ' + tbl + ' SET fahuo_id = @fid WHERE DD_id = @did');
+
+        // 更新订单发货状态：先算该订单所有已发货总量
+        const sentR = await new mssql.Request(transaction)
+          .input('did', mssql.Int, parseInt(item.dd_id))
+          .query('SELECT SUM(shuliang_sent) as total FROM FahuoOrder WHERE dd_id = @did');
+        const totalSent = parseInt(sentR.recordset[0].total) || 0;
+
+        // 取订单总量
+        const ordR = await new mssql.Request(transaction)
+          .input('did', mssql.Int, parseInt(item.dd_id))
+          .query('SELECT shuliang FROM ' + tbl + ' WHERE DD_id = @did');
+        const totalQty = parseFloat(ordR.recordset[0]?.shuliang) || 0;
+
+        // 发货数>=订单数 → 完全发货，ZT=1 且 fahuo=1；否则 fahuo=1（部分发货）
+        const isFull = totalQty > 0 && totalSent >= totalQty;
+        const reqSt = new mssql.Request(transaction);
+        reqSt.input('did', mssql.Int, parseInt(item.dd_id));
+        reqSt.input('fahuoVal', mssql.Int, 1);
+        reqSt.input('ztVal', mssql.Int, isFull ? 1 : 2);
+        await reqSt.query(
+          'UPDATE ' + tbl + ' SET fahuo = @fahuoVal' + (isFull ? ', ZT = @ztVal' : '') + ' WHERE DD_id = @did'
+        );
       }
     }
 
@@ -257,51 +413,192 @@ router.post('/', authMiddleware, requireDept('A', 'S'), async function(req, res)
 });
 
 // ── 修改发货单 ──────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   put:
+ *     summary: 修改发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               company: { type: string }
+ *               kdgs: { type: string }
+ *               kdhao: { type: string }
+ *               ywy: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 修改成功
+ */
 router.put('/:id', authMiddleware, requireDept('A', 'S'), async function(req, res) {
+  const pool = await db.getPool();
+  const transaction = new mssql.Transaction(pool);
   try {
+    await transaction.begin();
+
+    const fhId = parseInt(req.params.id);
     const body = req.body;
-    const fields = [];
-    const params = [];
-    let idx = 0;
 
-    function addField(name, type, value) {
-      fields.push(name + '=@p' + idx);
-      params.push(['p' + idx, type, value]);
-      idx++;
-    }
+    // 1. 更新 FaHuoDan 主表
+    const fhReq = new mssql.Request(transaction);
+    fhReq.input('id', mssql.Int, fhId);
+    if (body.company !== undefined) { fhReq.input('company', mssql.NVarChar, body.company); }
+    if (body.kdgs !== undefined) { fhReq.input('kdgs', mssql.NVarChar, body.kdgs); }
+    if (body.kdhao !== undefined) { fhReq.input('kdhao', mssql.NVarChar, body.kdhao); }
+    if (body.ywy !== undefined) { fhReq.input('ywy', mssql.Int, body.ywy ? parseInt(body.ywy) : null); }
 
-    if (body.company !== undefined) addField('company', mssql.NVarChar, body.company);
-    if (body.kdgs !== undefined) addField('kdgs', mssql.NVarChar, body.kdgs);
-    if (body.kdhao !== undefined) addField('kdhao', mssql.NVarChar, body.kdhao);
-    if (body.ywy !== undefined) addField('ywy', mssql.Int, body.ywy ? parseInt(body.ywy) : null);
+    const fhSets = [];
+    if (body.company !== undefined) fhSets.push('company=@company');
+    if (body.kdgs !== undefined) fhSets.push('kdgs=@kdgs');
+    if (body.kdhao !== undefined) fhSets.push('kdhao=@kdhao');
+    if (body.ywy !== undefined) fhSets.push('ywy=@ywy');
 
+    // 手工模式：更新 pingming1-9
     for (let i = 1; i <= 9; i++) {
-      addField('pingming' + i, mssql.NVarChar, '');
-      addField('khao' + i, mssql.NVarChar, '');
-      addField('dnbh' + i, mssql.NVarChar, '');
-      addField('shuliang' + i, mssql.NVarChar, '');
-      addField('beizhu' + i, mssql.NVarChar, '');
+      fhSets.push('pingming' + i + '=@pm' + i);
+      fhReq.input('pm' + i, mssql.NVarChar, body['pingming' + i] || '');
+      fhSets.push('khao' + i + '=@kh' + i);
+      fhReq.input('kh' + i, mssql.NVarChar, body['khao' + i] || '');
+      fhSets.push('dnbh' + i + '=@dn' + i);
+      fhReq.input('dn' + i, mssql.NVarChar, body['dnbh' + i] || '');
+      fhSets.push('shuliang' + i + '=@sl' + i);
+      fhReq.input('sl' + i, mssql.NVarChar, body['shuliang' + i] || '');
+      fhSets.push('beizhu' + i + '=@bz' + i);
+      fhReq.input('bz' + i, mssql.NVarChar, body['beizhu' + i] || '');
     }
 
-    for (let i = 0; i < 9; i++) {
-      const base = 4 + i * 5;
-      if (body['pingming' + (i+1)]) params[base][2] = String(body['pingming' + (i+1)] || '');
-      if (body['khao' + (i+1)]) params[base + 1][2] = String(body['khao' + (i+1)] || '');
-      if (body['dnbh' + (i+1)]) params[base + 2][2] = String(body['dnbh' + (i+1)] || '');
-      if (body['shuliang' + (i+1)]) params[base + 3][2] = String(body['shuliang' + (i+1)] || '');
-      if (body['beizhu' + (i+1)]) params[base + 4][2] = String(body['beizhu' + (i+1)] || '');
+    if (fhSets.length > 0) {
+      await fhReq.query('UPDATE FaHuoDan SET ' + fhSets.join(',') + ' WHERE ID=@id');
     }
 
-    params.push(['id', mssql.Int, parseInt(req.params.id)]);
-    await reqT('UPDATE FaHuoDan SET ' + fields.join(',') + ' WHERE ID=@id', params);
+    // 2. 收集这次要处理的 dd_id（去重）
+    const allDdIds = new Set();
+    if (body.orders && body.orders.length > 0) {
+      body.orders.forEach(o => { if (o.dd_id) allDdIds.add(String(o.dd_id)); });
+    }
+
+    // 3. 查出旧关联的 dd_id
+    const oldR = await new mssql.Request(transaction)
+      .input('fhId', mssql.Int, fhId)
+      .query('SELECT dd_id FROM FahuoOrder WHERE fahuo_id = @fhId');
+    oldR.recordset.forEach(r => allDdIds.add(String(r.dd_id)));
+
+    // 4. 删除旧关联（FahuoOrder 里该 fahuo_id 的全部删掉）
+    await new mssql.Request(transaction)
+      .input('fhId', mssql.Int, fhId)
+      .query('DELETE FROM FahuoOrder WHERE fahuo_id = @fhId');
+
+    // 5. 插入新关联（如果有 orders）
+    if (body.orders && body.orders.length > 0) {
+      for (const item of body.orders) {
+        if (!item.dd_id || !item.product_type) continue;
+        const sent = parseInt(item.shuliang_sent) || 0;
+        const reqO = new mssql.Request(transaction);
+        reqO.input('fid', mssql.Int, fhId);
+        reqO.input('did', mssql.Int, parseInt(item.dd_id));
+        reqO.input('pt', mssql.NVarChar, item.product_type);
+        reqO.input('ss', mssql.Int, sent);
+        reqO.input('pn', mssql.NVarChar, item.proudnumber || '');
+        reqO.input('kh', mssql.NVarChar, item.kuanhao || '');
+        reqO.input('st', mssql.Int, parseInt(item.shuliang_total) || 0);
+        reqO.input('bz', mssql.NVarChar, item.beizhu || '');
+        await reqO.query(
+          'INSERT INTO FahuoOrder (fahuo_id, dd_id, product_type, shuliang_sent, proudnumber, kuanhao, shuliang_total, beizhu, regtime) ' +
+          'VALUES (@fid, @did, @pt, @ss, @pn, @kh, @st, @bz, GETDATE())'
+        );
+        const reqU = new mssql.Request(transaction);
+        reqU.input('fid', mssql.Int, fhId);
+        reqU.input('did', mssql.Int, parseInt(item.dd_id));
+        await reqU.query('UPDATE ' + item.product_type + ' SET fahuo_id = @fid WHERE DD_id = @did');
+      }
+    }
+
+    // 6. 统一重新计算所有受影响订单的 ZT/fahuo 状态
+    const tblMap = { 'YS': 'YS', 'YM': 'YM', 'ZM': 'ZM', 'DS': 'DS' };
+    for (const didStr of allDdIds) {
+      const ddId = parseInt(didStr);
+      let productType = null;
+      // 找出这笔订单属于哪个产品线（在旧关联里查）
+      for (const [pt, tbl] of Object.entries(tblMap)) {
+        const chkR = await new mssql.Request(transaction)
+          .input('did', mssql.Int, ddId)
+          .query('SELECT 1 FROM ' + tbl + ' WHERE DD_id = @did');
+        if (chkR.recordset.length > 0) { productType = pt; break; }
+      }
+      if (!productType) continue;
+      const tbl = productType;
+
+      // 算总发货量
+      const sentR = await new mssql.Request(transaction)
+        .input('did', mssql.Int, ddId)
+        .query('SELECT SUM(shuliang_sent) as total FROM FahuoOrder WHERE dd_id = @did');
+      const totalSent = parseInt(sentR.recordset[0]?.total) || 0;
+
+      // 取订单总量
+      const ordR = await new mssql.Request(transaction)
+        .input('did', mssql.Int, ddId)
+        .query('SELECT shuliang FROM ' + tbl + ' WHERE DD_id = @did');
+      const totalQty = parseFloat(ordR.recordset[0]?.shuliang) || 0;
+
+      // 决定状态
+      if (totalSent <= 0) {
+        await new mssql.Request(transaction)
+          .input('did', mssql.Int, ddId)
+          .query('UPDATE ' + tbl + ' SET fahuo=0, fahuo_id=NULL, ZT=2 WHERE DD_id=@did');
+      } else {
+        const isFull = totalQty > 0 && totalSent >= totalQty;
+        const reqSt = new mssql.Request(transaction);
+        reqSt.input('did', mssql.Int, ddId);
+        reqSt.input('fahuoVal', mssql.Int, 1);
+        if (isFull) { reqSt.input('ztVal', mssql.Int, 1); }
+        await reqSt.query(
+          'UPDATE ' + tbl + ' SET fahuo=@fahuoVal' +
+          (isFull ? ', ZT=@ztVal' : '') +
+          ' WHERE DD_id=@did'
+        );
+      }
+    }
+
+    await transaction.commit();
     res.json({ success: true });
   } catch (err) {
+    await transaction.rollback();
     console.error(err);
     res.status(500).json({ error: '修改发货单失败', detail: err.message });
   }
 });
 
 // ── 删除发货单 ─────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{id}:
+ *   delete:
+ *     summary: 删除发货单
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   const pool = await db.getPool();
   const transaction = new mssql.Transaction(pool);
@@ -311,26 +608,59 @@ router.delete('/:id', authMiddleware, requireDept('A', 'S'), async function(req,
     const fhId = parseInt(req.params.id);
     const tblMap = { 'YS': 'YS', 'YM': 'YM', 'ZM': 'ZM', 'DS': 'DS' };
 
+    // 1. 查出旧关联的 dd_id（删除前先收集）
     const ordersR = await new mssql.Request(transaction)
       .input('fhId', mssql.Int, fhId)
       .query('SELECT dd_id, product_type FROM FahuoOrder WHERE fahuo_id = @fhId');
+    const oldOrders = ordersR.recordset; // [{dd_id, product_type}]
 
-    for (const row of ordersR.recordset) {
-      const tbl = tblMap[row.product_type];
-      if (tbl) {
-        await new mssql.Request(transaction)
-          .input('fhId', mssql.Int, fhId)
-          .input('ddId', mssql.Int, row.dd_id)
-          .query('UPDATE ' + tbl + ' SET fahuo_id = NULL WHERE DD_id = @ddId AND fahuo_id = @fhId');
-      }
-    }
-
+    // 2. 删除 FahuoOrder
     await new mssql.Request(transaction)
       .input('fhId', mssql.Int, fhId)
       .query('DELETE FROM FahuoOrder WHERE fahuo_id = @fhId');
+
+    // 3. 删除 FaHuoDan
     await new mssql.Request(transaction)
       .input('fhId', mssql.Int, fhId)
       .query('DELETE FROM FaHuoDan WHERE ID = @fhId');
+
+    // 4. 重新计算每笔受影响订单的 ZT/fahuo 状态
+    for (const row of oldOrders) {
+      const tbl = tblMap[row.product_type];
+      if (!tbl) continue;
+      const ddId = parseInt(row.dd_id);
+
+      // 算剩余总发货量
+      const sentR = await new mssql.Request(transaction)
+        .input('did', mssql.Int, ddId)
+        .query('SELECT SUM(shuliang_sent) as total FROM FahuoOrder WHERE dd_id = @did');
+      const totalSent = parseInt(sentR.recordset[0]?.total) || 0;
+
+      // 取订单总量
+      const ordR = await new mssql.Request(transaction)
+        .input('did', mssql.Int, ddId)
+        .query('SELECT shuliang FROM ' + tbl + ' WHERE DD_id = @did');
+      const totalQty = parseFloat(ordR.recordset[0]?.shuliang) || 0;
+
+      if (totalSent <= 0) {
+        // 无任何发货记录了，恢复为待发货状态
+        await new mssql.Request(transaction)
+          .input('did', mssql.Int, ddId)
+          .query('UPDATE ' + tbl + ' SET fahuo=0, fahuo_id=NULL, ZT=2 WHERE DD_id=@did');
+      } else {
+        // 还有发货记录，更新状态（部分发货或已完）
+        const isFull = totalQty > 0 && totalSent >= totalQty;
+        const reqSt = new mssql.Request(transaction);
+        reqSt.input('did', mssql.Int, ddId);
+        reqSt.input('fahuoVal', mssql.Int, 1);
+        if (isFull) { reqSt.input('ztVal', mssql.Int, 1); }
+        await reqSt.query(
+          'UPDATE ' + tbl + ' SET fahuo=@fahuoVal' +
+          (isFull ? ', ZT=@ztVal' : '') +
+          ' WHERE DD_id=@did'
+        );
+      }
+    }
 
     await transaction.commit();
     res.json({ success: true });
@@ -342,6 +672,31 @@ router.delete('/:id', authMiddleware, requireDept('A', 'S'), async function(req,
 });
 
 // ── 取消单个订单的发货关联 ────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/fahuo/{fhId}/orders/{ddId}:
+ *   delete:
+ *     summary: 取消单个订单的发货关联
+ *     tags: [发货]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fhId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 发货单ID
+ *       - in: path
+ *         name: ddId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 订单ID
+ *     responses:
+ *       200:
+ *         description: 取消成功
+ */
 router.delete('/:fhId/orders/:ddId', authMiddleware, requireDept('A', 'S'), async function(req, res) {
   try {
     const fhId = parseInt(req.params.fhId);
